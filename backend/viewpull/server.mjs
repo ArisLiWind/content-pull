@@ -3,6 +3,18 @@ import { callDeepSeek } from "./deepseek.mjs";
 import { handleMcpJsonRpc } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": [
+    "Content-Type",
+    "Authorization",
+    "X-DeepSeek-API-Key",
+    "x-deepseek-api-key"
+  ].join(", "),
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Max-Age": "86400"
+};
+
 const server = globalThis.Bun
   ? null
   : await import("node:http").then(({ createServer }) =>
@@ -52,7 +64,7 @@ async function route(request, response) {
   }
 
   if (request.method === "POST" && url.pathname === "/deepseek/test") {
-    const requestApiKey = request.headers["x-deepseek-api-key"];
+    const requestApiKey = getRequestApiKey(request);
     const result = await callDeepSeek([
       {
         role: "system",
@@ -68,7 +80,7 @@ async function route(request, response) {
 
   if (request.method === "POST" && url.pathname === "/deepseek/chat") {
     const body = await readJson(request);
-    const requestApiKey = request.headers["x-deepseek-api-key"] || body.apiKey;
+    const requestApiKey = getRequestApiKey(request) || body.apiKey;
     const messages = Array.isArray(body.messages) ? body.messages : [];
     if (!messages.length) return sendJson(response, 400, { ok: false, error: "messages are required" });
 
@@ -81,7 +93,7 @@ async function route(request, response) {
 
   if (request.method === "POST" && url.pathname === "/agent/research") {
     const body = await readJson(request);
-    const requestApiKey = request.headers["x-deepseek-api-key"] || body.apiKey;
+    const requestApiKey = getRequestApiKey(request) || body.apiKey;
     const query = String(body.query || "").trim();
     if (!query) return sendJson(response, 400, { ok: false, error: "query is required" });
 
@@ -121,11 +133,18 @@ async function readJson(request) {
   return text ? JSON.parse(text) : {};
 }
 
+function getRequestApiKey(request) {
+  const explicitKey = request.headers["x-deepseek-api-key"];
+  if (explicitKey) return explicitKey;
+
+  const authorization = String(request.headers.authorization || "");
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] || "";
+}
+
 function sendJson(response, status, payload) {
   response.writeHead(status, {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    ...CORS_HEADERS,
     "Content-Type": "application/json; charset=utf-8"
   });
   response.end(status === 204 ? "" : JSON.stringify(payload, null, 2));

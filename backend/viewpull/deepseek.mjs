@@ -24,14 +24,23 @@ export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeou
       })
     });
 
+    const text = await response.text();
+    let data = null;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
+    }
+
     if (!response.ok) {
       return {
         ok: false,
-        error: `DeepSeek API failed with ${response.status}`
+        status: response.status,
+        error: getDeepSeekErrorMessage(response.status, data),
+        detail: data
       };
     }
 
-    const data = await response.json();
     return {
       ok: true,
       provider: "deepseek",
@@ -47,4 +56,10 @@ export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeou
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function getDeepSeekErrorMessage(status, data) {
+  const apiMessage = data?.error?.message || data?.message || "";
+  if (apiMessage) return `DeepSeek API failed with ${status}: ${apiMessage}`;
+  return `DeepSeek API failed with ${status}`;
 }
