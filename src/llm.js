@@ -4,6 +4,7 @@ export class ModelClient {
   }
 
   get configured() {
+    if (this.config.provider === "deepseek") return true;
     return Boolean(this.config.apiKey && this.config.provider !== "local");
   }
 
@@ -81,7 +82,7 @@ export class ModelClient {
   }
 
   async chatViaViewPullBackend({ system, messages, temperature }) {
-    const backendUrl = "http://127.0.0.1:8788/deepseek/chat";
+    const backendUrl = "http://127.0.0.1:8788/assistant/chat";
     const payloadMessages = [
       ...(system ? [{ role: "system", content: system }] : []),
       ...messages

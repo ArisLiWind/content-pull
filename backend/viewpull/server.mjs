@@ -1,6 +1,6 @@
 import { VIEWPULL_BACKEND, publicBackendConfig } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
-import { handleMcpJsonRpc } from "./mcp.mjs";
+import { callMcpTool, handleMcpJsonRpc, listMcpTools } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
 
 const CORS_HEADERS = {
@@ -63,6 +63,65 @@ async function route(request, response) {
     return sendJson(response, 200, await handleMcpJsonRpc(await readJson(request)));
   }
 
+  if (request.method === "GET" && url.pathname === "/tools/list") {
+    return sendJson(response, 200, {
+      ok: true,
+      tools: listMcpTools()
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/tools/call") {
+    const body = await readJson(request);
+    const result = await callMcpTool(body.tool || body.name, body.input || body.arguments || {});
+    return sendJson(response, result.ok ? 200 : 400, result);
+  }
+
+  if (request.method === "POST" && url.pathname === "/v1/chat/completions") {
+    const body = await readJson(request);
+    const requestApiKey = getRequestApiKey(request) || body.apiKey;
+    const messages = normalizeMessages(body.messages);
+    if (!messages.length) return sendJson(response, 400, { ok: false, error: "messages are required" });
+
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user")?.content || "";
+    const openclaw = await checkOpenClawRuntime();
+    const toolContext = await prepareOpenClawContext(lastUserMessage);
+    const result = await callDeepSeek([
+      {
+        role: "system",
+        content: buildAssistantSystemPrompt(openclaw, toolContext)
+      },
+      ...messages
+    ], {
+      apiKey: requestApiKey,
+      temperature: Number.isFinite(body.temperature) ? body.temperature : 0.7
+    });
+
+    if (!result.ok) return sendJson(response, 400, result);
+    return sendJson(response, 200, {
+      id: `chatcmpl-${crypto.randomUUID()}`,
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: body.model || VIEWPULL_BACKEND.openclaw.model,
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: result.text
+          },
+          finish_reason: "stop"
+        }
+      ],
+      usage: result.usage || null,
+      openclaw: {
+        mode: openclaw.mode,
+        source: openclaw.source || "remote",
+        tools: openclaw.mcp?.tools || [],
+        usedContext: Boolean(toolContext)
+      }
+    });
+  }
+
   if (request.method === "POST" && url.pathname === "/deepseek/test") {
     const requestApiKey = getRequestApiKey(request);
     const result = await callDeepSeek([
@@ -89,6 +148,38 @@ async function route(request, response) {
       temperature: Number.isFinite(body.temperature) ? body.temperature : 0.7
     });
     return sendJson(response, result.ok ? 200 : 400, result);
+  }
+
+  if (request.method === "POST" && url.pathname === "/assistant/chat") {
+    const body = await readJson(request);
+    const requestApiKey = getRequestApiKey(request) || body.apiKey;
+    const messages = normalizeMessages(body.messages);
+    if (!messages.length) return sendJson(response, 400, { ok: false, error: "messages are required" });
+
+    const lastUserMessage = [...messages].reverse().find((message) => message.role === "user")?.content || "";
+    const openclaw = await checkOpenClawRuntime();
+    const toolContext = await prepareOpenClawContext(lastUserMessage);
+    const result = await callDeepSeek([
+      {
+        role: "system",
+        content: buildAssistantSystemPrompt(openclaw, toolContext)
+      },
+      ...messages
+    ], {
+      apiKey: requestApiKey,
+      temperature: Number.isFinite(body.temperature) ? body.temperature : 0.7
+    });
+
+    return sendJson(response, result.ok ? 200 : 400, {
+      ...result,
+      provider: result.ok ? "viewpull-assistant" : result.provider,
+      openclaw: {
+        mode: openclaw.mode,
+        source: openclaw.source || "remote",
+        tools: openclaw.mcp?.tools || [],
+        usedContext: Boolean(toolContext)
+      }
+    });
   }
 
   if (request.method === "POST" && url.pathname === "/agent/research") {
@@ -140,6 +231,39 @@ function getRequestApiKey(request) {
   const authorization = String(request.headers.authorization || "");
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   return match?.[1] || "";
+}
+
+function normalizeMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  return messages
+    .filter((message) => ["system", "user", "assistant"].includes(message?.role))
+    .map((message) => ({
+      role: message.role,
+      content: String(message.content || "").trim()
+    }))
+    .filter((message) => message.content);
+}
+
+async function prepareOpenClawContext(message) {
+  if (!shouldUseOpenClawContext(message)) return "";
+  const result = await askOpenClaw(message);
+  if (!result.ok || !result.text) return "";
+  return result.text;
+}
+
+function shouldUseOpenClawContext(message) {
+  return /搜索|研究|资料|来源|网页|浏览器|openclaw|工具|最新|今天|联网|查一下|帮我找/i.test(message);
+}
+
+function buildAssistantSystemPrompt(openclaw, toolContext) {
+  return [
+    "你是 ViewPull，一个个人 AI 助手。你要直接和用户对话，而不是默认修改文章。",
+    "你的回答应该自然、清楚、可执行。用户没有要求写长文时，不要自动生成文章草稿。",
+    "当用户要求研究、搜索、整理资料、生成方案、写代码、改写文本或规划任务时，你可以给出步骤、结论和下一步建议。",
+    "如果用户明确要求修改右侧文件或文章，你可以提醒用户使用下方“修改”输入框；但正常聊天必须直接回答。",
+    `OpenClaw runtime: ${openclaw.mode || "unknown"}; MCP tools: ${(openclaw.mcp?.tools || []).join(", ") || "none"}.`,
+    toolContext ? `OpenClaw context:\n${toolContext}` : ""
+  ].filter(Boolean).join("\n\n");
 }
 
 function sendJson(response, status, payload) {

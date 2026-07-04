@@ -137,8 +137,55 @@ export class WorkflowHarness {
     return state;
   }
 
-  async continueConversation(initialState, instruction) {
-    return this.applyNaturalLanguageRevision(initialState, instruction);
+  async continueConversation(initialState, instruction, { appendUser = true } = {}) {
+    let state = appendLog(initialState, `User message: ${instruction}`);
+    const now = new Date().toISOString();
+    const messages = [
+      ...(appendUser
+        ? [
+            {
+              id: crypto.randomUUID(),
+              role: "user",
+              content: instruction,
+              createdAt: now
+            }
+          ]
+        : []),
+      {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: "正在思考...",
+        createdAt: now,
+        pending: true
+      }
+    ];
+
+    state = applyStatePatch(state, {
+      status: WORKFLOW_STATUS.RUNNING,
+      currentNode: "Assistant Chat",
+      messages: [...(state.messages || []), ...messages]
+    });
+    this.emit(state);
+
+    const reply = await this.generateAssistantReply(state);
+    state = applyStatePatch(state, {
+      status: WORKFLOW_STATUS.READY,
+      currentNode: null,
+      messages: state.messages.map((message) => (
+        message.pending
+          ? {
+              ...message,
+              content: reply,
+              pending: false,
+              createdAt: new Date().toISOString()
+            }
+          : message
+      ))
+    });
+    state = appendLog(state, "Assistant replied", { level: "success" });
+    this.context.memory.rememberTask(state, "assistant.chat");
+    this.emit(state);
+    return state;
   }
 
   async rewriteDraft(state, instruction) {
@@ -164,6 +211,29 @@ export class WorkflowHarness {
 修改要求：${instruction}
 
 已在当前对话中保留原有文章结构，并按新要求继续调整。连接 DeepSeek 或 OpenClaw 后，这里会由模型完成更细的语义改写。`;
+  }
+
+  async generateAssistantReply(state) {
+    if (!this.context.model.configured) {
+      return "我还没有连接可用的模型。请在设置里保存 DeepSeek API Key，或在后端启动时配置 DEEPSEEK_API_KEY。";
+    }
+
+    const chatMessages = (state.messages || [])
+      .filter((message) => !message.pending && ["user", "assistant"].includes(message.role))
+      .slice(-16)
+      .map((message) => ({
+        role: message.role,
+        content: message.content
+      }));
+
+    const result = await this.context.model.chat({
+      system: "你是 ViewPull 的个人 AI 助手。正常对话时直接回答用户，不要默认修改文章。回答使用中文，简洁但有帮助。",
+      messages: chatMessages,
+      temperature: 0.7
+    });
+
+    if (result.ok && result.text.trim()) return result.text.trim();
+    return `我现在没能成功调用模型：${result.error || "未知错误"}。`;
   }
 
   async runResearchLoop(initialState) {

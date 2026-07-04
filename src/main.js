@@ -426,7 +426,7 @@ function renderProgress(task) {
 function renderWaitingState(task) {
   return `
     <article class="message assistant-message">
-      <p>${store.isRunning ? "正在整理内容草稿..." : `任务状态：${formatStatus(task.status)}。文件预览在右侧窗口。`}</p>
+      <p>${store.isRunning ? "ViewPull 正在回复..." : `会话状态：${formatStatus(task.status)}。`}</p>
     </article>
   `;
 }
@@ -589,7 +589,7 @@ function bindEvents() {
         const task = createTaskState(goal);
         store.activeTaskId = task.taskId;
         upsertTask(task);
-        await harness.run(task);
+        await harness.continueConversation(task, goal, { appendUser: false });
       }
     } finally {
       store.isRunning = false;
