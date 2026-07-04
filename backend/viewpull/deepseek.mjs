@@ -1,7 +1,9 @@
 import { VIEWPULL_BACKEND, assertDeepSeekApiKey } from "./config.mjs";
+import { getDeepSeekApiKey, loadLocalConfig } from "./local-config.mjs";
 
 export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeoutMs = 30000 } = {}) {
-  const effectiveApiKey = String(apiKey || VIEWPULL_BACKEND.deepseek.apiKey || "").trim();
+  await loadLocalConfig();
+  const effectiveApiKey = String(apiKey || getDeepSeekApiKey() || VIEWPULL_BACKEND.deepseek.apiKey || "").trim();
   if (!effectiveApiKey) {
     return assertDeepSeekApiKey();
   }

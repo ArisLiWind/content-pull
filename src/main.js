@@ -11,7 +11,8 @@ import {
   loadBackendConfig,
   loadBackendConfigFromDatabase,
   saveAccountSession,
-  saveBackendConfig
+  saveBackendConfig,
+  syncDeepSeekApiKeyToBackend
 } from "./backend.js";
 import { contentDatabase, migrateLegacyLocalStorage } from "./database.js";
 
@@ -491,13 +492,19 @@ function bindEvents() {
     render();
   });
 
-  document.querySelector("[data-action='save-backend-config']")?.addEventListener("submit", (event) => {
+  document.querySelector("[data-action='save-backend-config']")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     store.backendConfig = saveBackendConfig({
       apiKey: form.get("apiKey")
     });
-    store.accountNotice = "DeepSeek API Key 已保存。";
+    store.accountNotice = "DeepSeek API Key 已保存，正在同步到后端...";
+    render();
+
+    const result = await syncDeepSeekApiKeyToBackend(store.backendConfig.apiKey);
+    store.accountNotice = result.ok
+      ? "DeepSeek API Key 已保存，并已同步到后端。"
+      : `DeepSeek API Key 已保存到前端，但同步后端失败：${result.error}`;
     render();
   });
 

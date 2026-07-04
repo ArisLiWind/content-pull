@@ -65,6 +65,23 @@ export function saveBackendConfig(config) {
   return nextConfig;
 }
 
+export async function syncDeepSeekApiKeyToBackend(apiKey) {
+  const trimmedApiKey = String(apiKey || "").trim();
+  if (!trimmedApiKey) return { ok: false, error: "apiKey is required" };
+
+  try {
+    const response = await fetch("http://127.0.0.1:8788/config/deepseek", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: trimmedApiKey })
+    });
+    const payload = await response.json();
+    return response.ok ? payload : { ok: false, error: payload.error || `Backend config failed: ${response.status}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
 function normalizeBackendConfig(config = {}) {
   return {
     ...DEFAULT_BACKEND_CONFIG,

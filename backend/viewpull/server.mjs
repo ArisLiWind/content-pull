@@ -1,5 +1,6 @@
 import { VIEWPULL_BACKEND, publicBackendConfig } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
+import { loadLocalConfig, publicLocalConfig, saveDeepSeekApiKey } from "./local-config.mjs";
 import { callMcpTool, handleMcpJsonRpc, listMcpTools } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
 
@@ -23,6 +24,8 @@ const server = globalThis.Bun
       })
     );
 
+await loadLocalConfig();
+
 if (!server) {
   throw new Error("ViewPull backend currently expects the Node.js runtime.");
 }
@@ -42,11 +45,13 @@ async function route(request, response) {
   }
 
   if (request.method === "GET" && url.pathname === "/health") {
+    await loadLocalConfig();
     const openclaw = await checkOpenClawRuntime();
     return sendJson(response, 200, {
       ok: true,
       service: "viewpull-backend",
       config: publicBackendConfig(),
+      localConfig: publicLocalConfig(),
       requirements: {
         needsDeepSeekApiKey: !VIEWPULL_BACKEND.deepseek.apiKey,
         needsOpenClawCloudDeploy: false
@@ -57,6 +62,25 @@ async function route(request, response) {
 
   if (request.method === "GET" && url.pathname === "/openclaw/status") {
     return sendJson(response, 200, await checkOpenClawRuntime());
+  }
+
+  if (request.method === "GET" && url.pathname === "/config/deepseek") {
+    await loadLocalConfig();
+    return sendJson(response, 200, {
+      ok: true,
+      ...publicLocalConfig()
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/config/deepseek") {
+    const body = await readJson(request);
+    const apiKey = String(body.apiKey || getRequestApiKey(request) || "").trim();
+    if (!apiKey) return sendJson(response, 400, { ok: false, error: "apiKey is required" });
+
+    return sendJson(response, 200, {
+      ok: true,
+      ...(await saveDeepSeekApiKey(apiKey))
+    });
   }
 
   if (request.method === "POST" && url.pathname === "/mcp") {
