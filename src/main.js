@@ -1,0 +1,829 @@
+import { WorkflowHarness } from "./harness.js";
+import { createTaskState } from "./state.js";
+import { createDefaultToolRouter } from "./tools.js";
+import { createPublisherRegistry } from "./publishers.js";
+import { exportBlob, renderMarkdown } from "./markdown.js";
+import { ModelClient } from "./llm.js";
+import {
+  clearAccountSession,
+  loadAccountSession,
+  loadAccountSessionFromDatabase,
+  loadBackendConfig,
+  loadBackendConfigFromDatabase,
+  saveAccountSession,
+  saveBackendConfig
+} from "./backend.js";
+import { contentDatabase, migrateLegacyLocalStorage } from "./database.js";
+
+const app = document.querySelector("#app");
+const tools = createDefaultToolRouter();
+const publishers = createPublisherRegistry();
+
+const store = {
+  tasks: loadTasks(),
+  activeTaskId: null,
+  isRunning: false,
+  selectedVariant: "wechat",
+  sidebarMode: "tasks",
+  searchQuery: "",
+  previewMode: "file",
+  accountMenuOpen: false,
+  accountView: "menu",
+  account: loadAccountSession(),
+  backendConfig: loadBackendConfig(),
+  backendStatus: createBackendStatus(),
+  accountNotice: "",
+  hasUpdate: false
+};
+
+bootstrap();
+
+async function bootstrap() {
+  await contentDatabase.ready();
+  await migrateLegacyLocalStorage();
+  store.tasks = await loadTasksFromDatabase();
+  store.account = await loadAccountSessionFromDatabase();
+  store.backendConfig = await loadBackendConfigFromDatabase();
+
+  if (store.tasks.length) {
+    store.activeTaskId = store.tasks[0].taskId;
+  }
+
+  render();
+}
+
+function render() {
+  const activeTask = getActiveTask();
+  app.innerHTML = `
+    <main class="workspace">
+      ${renderSidebar(activeTask)}
+      ${renderMainPanel(activeTask)}
+      ${renderPreviewPanel(activeTask)}
+    </main>
+  `;
+
+  bindEvents();
+}
+
+function renderSidebar(activeTask) {
+  const visibleTasks = getVisibleSidebarTasks();
+
+  return `
+    <aside class="sidebar">
+      <div class="window-controls" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+      <nav class="nav-list" aria-label="Main">
+        <button class="nav-item ${store.sidebarMode === "tasks" ? "active" : ""}" data-action="new-task">新对话</button>
+        <button class="nav-item ${store.sidebarMode === "search" ? "active" : ""}" data-action="search">搜索</button>
+      </nav>
+
+      ${store.sidebarMode === "search" ? renderSearchBox() : ""}
+
+      <div class="section-label">ViewPull</div>
+      <div class="task-list">
+        ${visibleTasks
+          .map(
+            (task) => `
+              <button class="task-item ${activeTask?.taskId === task.taskId ? "active" : ""}" data-task-id="${task.taskId}">
+                <span class="task-title">${escapeHtml(displayText(task.topic.normalized || "Untitled Task"))}</span>
+                <span class="task-meta">
+                  <span class="status-dot ${task.status}"></span>
+                  ${formatStatus(task.status)}
+                </span>
+              </button>
+            `
+          )
+          .join("") || `<div class="empty task-empty">${store.sidebarMode === "search" ? "没有匹配结果" : "还没有任务"}</div>`}
+      </div>
+      <div class="account-wrap">
+        <button class="account-row" data-action="toggle-account-menu" type="button">
+        <div class="avatar">VP</div>
+        <div>
+          <strong>${escapeHtml(store.account.loggedIn ? store.account.name : "未登录")}</strong>
+          <span>${escapeHtml(store.account.loggedIn ? store.account.plan : "点击登录")}</span>
+        </div>
+        ${store.hasUpdate ? `<span class="update-button">更新</span>` : ""}
+        </button>
+        ${store.accountMenuOpen ? renderAccountMenu() : ""}
+      </div>
+    </aside>
+  `;
+}
+
+function renderAccountMenu() {
+  if (!store.account.loggedIn) {
+    return `
+      <div class="account-menu">
+        <div class="account-menu-head">
+          <span>ViewPull</span>
+          <strong>登录账号</strong>
+        </div>
+        <form class="account-form" data-action="account-login">
+          <label>
+            邮箱
+            <input name="email" value="azalearedn@gmail.com" autocomplete="email" />
+          </label>
+          <label>
+            密码
+            <input name="password" type="password" placeholder="本地预览可留空" autocomplete="current-password" />
+          </label>
+          <button class="account-primary" type="submit">登录</button>
+        </form>
+        ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
+      </div>
+    `;
+  }
+
+  if (store.accountView === "settings") return renderSettingsPanel();
+  if (store.accountView === "backend") return renderBackendStatusPanel();
+  if (store.accountView === "profile") return renderSimpleAccountPanel("个人资料", "创作者账号已连接本地 Content Agent。");
+  if (store.accountView === "invite") return renderSimpleAccountPanel("邀请好友", "邀请链接会在接入正式后端后生成。");
+  if (store.accountView === "quota") return renderSimpleAccountPanel("剩余用量", "本地预览：30 / 100 次 Agent Run。");
+
+  return `
+    <div class="account-menu">
+      <div class="account-menu-head">
+        <span>${escapeHtml(store.account.email)}</span>
+        <strong>个人帐户</strong>
+      </div>
+      <div class="account-menu-actions">
+        <button data-account-view="profile" type="button">个人资料</button>
+        <button data-account-view="settings" type="button">设置</button>
+        <button data-account-view="backend" type="button">后端状态</button>
+        <button data-account-view="invite" type="button">邀请好友</button>
+        <button data-account-view="quota" type="button">剩余用量</button>
+        <button data-action="account-logout" type="button">退出登录</button>
+      </div>
+      ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderSettingsPanel() {
+  return `
+    <div class="account-menu account-menu-large">
+      <div class="account-panel-head">
+        <button class="account-back" data-action="account-back" type="button">‹</button>
+        <strong>设置</strong>
+      </div>
+      <form class="account-form" data-action="save-backend-config">
+        <label>
+          DeepSeek API Key
+          <input name="apiKey" value="${escapeHtml(store.backendConfig.apiKey)}" placeholder="sk-..." autocomplete="off" />
+        </label>
+        <button class="account-primary" type="submit">保存配置</button>
+      </form>
+      <button class="account-secondary" data-action="test-deepseek" type="button">测试 DeepSeek</button>
+      ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderBackendStatusPanel() {
+  const status = store.backendStatus;
+  const rows = [
+    ["DeepSeek", store.backendConfig.apiKey ? "已保存" : "等待 API Key"],
+    ["OpenClaw", status.openclawMode],
+    ["MCP", status.mcp],
+    ["Memory", status.memory],
+    ["Filesystem", status.filesystem],
+    ["Publisher", status.publisher]
+  ];
+
+  return `
+    <div class="account-menu account-menu-large">
+      <div class="account-panel-head">
+        <button class="account-back" data-action="account-back" type="button">‹</button>
+        <strong>后端状态</strong>
+      </div>
+      <div class="backend-status-list">
+        ${rows
+          .map(
+            ([label, value]) => `
+              <div class="backend-status-row">
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      <p class="account-panel-copy">OpenClaw、MCP、Memory 属于 ViewPull 内置后端能力。需要云端部署时，只配置 OPENCLAW_REMOTE_URL，不依赖本机 CLI/Gateway。</p>
+    </div>
+  `;
+}
+
+function renderSimpleAccountPanel(title, body) {
+  return `
+    <div class="account-menu">
+      <div class="account-panel-head">
+        <button class="account-back" data-action="account-back" type="button">‹</button>
+        <strong>${escapeHtml(title)}</strong>
+      </div>
+      <p class="account-panel-copy">${escapeHtml(body)}</p>
+    </div>
+  `;
+}
+
+function createBackendStatus() {
+  return {
+    openclawMode: "内置 Harness",
+    mcp: "已启用 /mcp",
+    memory: "viewpull-memory",
+    filesystem: "已启用",
+    publisher: "人工确认后发布"
+  };
+}
+
+function renderSearchBox() {
+  return `
+    <form class="search-form" data-action="search-form">
+      <input name="query" value="${escapeHtml(store.searchQuery)}" placeholder="搜索内容任务" autocomplete="off" />
+      ${store.searchQuery ? `<button type="button" data-action="clear-search">清除</button>` : ""}
+    </form>
+  `;
+}
+
+function renderMainPanel(task) {
+  const defaultPrompt = "帮我研究今天最重要的 AI 技术进展，整理成可执行的个人简报和发布草稿。";
+  const composerValue = task ? "" : defaultPrompt;
+  const composerPlaceholder = task ? "继续输入，让 ViewPull 接着处理" : "告诉 ViewPull 你想完成什么";
+
+  return `
+    <section class="main-panel">
+      <div class="thread">
+        <div class="empty-state">
+          <h2>你想让 <span>ViewPull</span> 帮你完成什么？</h2>
+        </div>
+        ${task ? renderConversation(task) : ""}
+      </div>
+
+      <div class="composer-wrap">
+        <form class="goal-form composer" data-action="run-task">
+          <textarea name="goal" rows="3" placeholder="${composerPlaceholder}">${escapeHtml(displayText(composerValue))}</textarea>
+          <div class="composer-actions">
+            <span class="composer-meta">${task ? "继续当前对话并更新右侧文件" : "ViewPull / local"}</span>
+            <button ${store.isRunning ? "disabled" : ""} type="submit">↑</button>
+          </div>
+        </form>
+        <form class="revision-form" data-action="revise">
+          <input name="instruction" placeholder="要求后续变更" ${!task?.draft.markdown ? "disabled" : ""} />
+          <button ${!task?.draft.markdown || store.isRunning ? "disabled" : ""} type="submit">修改</button>
+        </form>
+      </div>
+    </section>
+  `;
+}
+
+function renderConversation(task) {
+  const messages = task.messages?.length
+    ? task.messages
+    : [{ id: "initial", role: "user", content: task.userInput }];
+
+  return `
+    <section class="conversation">
+      ${messages.map(renderMessage).join("")}
+      ${renderProgress(task)}
+      ${renderWaitingState(task)}
+    </section>
+  `;
+}
+
+function renderMessage(message) {
+  const isUser = message.role === "user";
+  return `
+    <article class="message ${isUser ? "user-message" : "assistant-message"}">
+      <p>${escapeHtml(displayText(message.content))}</p>
+    </article>
+  `;
+}
+
+function renderPreviewPanel(task) {
+  const variants = task?.draft.variants || [];
+  const activeVariant = variants.find((variant) => variant.platform === store.selectedVariant) || variants[0];
+  const markdown = activeVariant?.markdown || task?.draft.markdown || "";
+  const html = markdown ? renderMarkdown(displayText(markdown)) : "";
+  const publishedTasks = getPublishedTasks();
+  const reviewTasks = getReviewTasks();
+
+  return `
+    <aside class="preview-panel">
+      <div class="preview-header">
+        <strong>文件</strong>
+      </div>
+
+      <div class="stats-row">
+        <button class="stat-button ${store.previewMode === "published" ? "active" : ""}" data-preview-mode="published">
+          <strong>${publishedTasks.length}</strong><span>今日发布</span>
+        </button>
+        <button class="stat-button ${store.previewMode === "review" ? "active" : ""}" data-preview-mode="review">
+          <strong>${reviewTasks.length}</strong><span>待审核</span>
+        </button>
+      </div>
+
+      ${
+        store.previewMode === "published"
+          ? renderTaskListPanel("今日发布", publishedTasks)
+          : store.previewMode === "review"
+            ? renderTaskListPanel("待审核", reviewTasks)
+            : renderFilePanel({ variants, activeVariant, markdown, html })
+      }
+    </aside>
+  `;
+}
+
+function renderFilePanel({ variants, activeVariant, markdown, html }) {
+  const isVideoScript = activeVariant?.platform === "xiaohongshu";
+  const primaryAction = isVideoScript ? "export-md" : "publish";
+  const primaryLabel = isVideoScript ? "导出" : "发布";
+
+  return `
+    <section class="file-panel">
+      <div class="file-toolbar">
+        <div class="variant-tabs">
+          ${variants
+            .map(
+              (variant) => `
+                <button class="${activeVariant?.platform === variant.platform ? "active" : ""}" data-variant="${variant.platform}">
+                  ${platformLabel(variant.platform)}
+                </button>
+              `
+            )
+            .join("") || `<button class="active" disabled>预览</button>`}
+          </div>
+          <div class="doc-actions">
+            <button class="primary-action" data-action="${primaryAction}" ${!markdown ? "disabled" : ""}>${primaryLabel}</button>
+          </div>
+        </div>
+      ${
+        markdown
+          ? `<article class="markdown-preview">${html}</article>`
+          : `<div class="preview-empty">从工作区目录树中选择文件</div>`
+      }
+    </section>
+  `;
+}
+
+function renderTaskListPanel(title, tasks) {
+  return `
+    <section class="preview-list-panel">
+      <div class="preview-list-header">
+        <strong>${title}</strong>
+        <button data-preview-mode="file" type="button">返回文件</button>
+      </div>
+      <div class="preview-task-list">
+        ${tasks
+          .map(
+            (task) => `
+              <button class="preview-task-item" data-open-preview-task="${task.taskId}">
+                <span>${escapeHtml(displayText(task.topic.normalized || "Untitled Task"))}</span>
+                <em>${formatStatus(task.status)}</em>
+              </button>
+            `
+          )
+          .join("") || `<div class="preview-empty">暂无${title}内容</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderProgress(task) {
+  const recentLogs = (task.logs || []).slice(-6);
+
+  return `
+    <section class="run-card">
+      <div class="run-summary">
+        <div>
+          <span>当前节点</span>
+          <strong>${task.currentNode || "准备中"}</strong>
+        </div>
+        <div>
+          <span>研究</span>
+          <strong>${task.loops.researchRound || 0}/3</strong>
+        </div>
+        <div>
+          <span>审稿</span>
+          <strong>${task.loops.reviewRound || 0}/2</strong>
+        </div>
+      </div>
+      <div class="log-stream">
+        ${recentLogs
+          .map(
+            (log) => `
+              <div class="log-line ${log.level}">
+                <span>${formatTime(log.timestamp)}</span>
+                <p>${escapeHtml(log.message)}</p>
+              </div>
+            `
+          )
+          .join("") || `<div class="empty">等待任务启动</div>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderWaitingState(task) {
+  return `
+    <article class="message assistant-message">
+      <p>${store.isRunning ? "正在整理内容草稿..." : `任务状态：${formatStatus(task.status)}。文件预览在右侧窗口。`}</p>
+    </article>
+  `;
+}
+
+function bindEvents() {
+  app.onclick = (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+
+    if (button.dataset.action === "toggle-account-menu") {
+      store.accountMenuOpen = !store.accountMenuOpen;
+      store.accountView = "menu";
+      store.accountNotice = "";
+      render();
+      return;
+    }
+
+    if (button.dataset.accountView) {
+      store.accountView = button.dataset.accountView;
+      store.accountNotice = "";
+      render();
+      return;
+    }
+
+    if (button.dataset.action === "account-back") {
+      store.accountView = "menu";
+      store.accountNotice = "";
+      render();
+      return;
+    }
+
+    if (button.dataset.action === "account-logout") {
+      store.account = clearAccountSession();
+      store.accountView = "menu";
+      store.accountNotice = "已退出登录。";
+      render();
+      return;
+    }
+
+    if (button.dataset.action === "test-deepseek") {
+      testDeepSeekConnection();
+    }
+  };
+
+  document.querySelector("[data-action='account-login']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const email = form.get("email").toString().trim();
+    if (!email) {
+      store.accountNotice = "请输入邮箱。";
+      render();
+      return;
+    }
+    store.account = saveAccountSession({
+      loggedIn: true,
+      email,
+      name: "创作者",
+      plan: "ViewPull Pro"
+    });
+    store.accountView = "menu";
+    store.accountNotice = "已登录。";
+    render();
+  });
+
+  document.querySelector("[data-action='save-backend-config']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    store.backendConfig = saveBackendConfig({
+      apiKey: form.get("apiKey")
+    });
+    store.accountNotice = "DeepSeek API Key 已保存。";
+    render();
+  });
+
+  document.querySelector("[data-action='new-task']")?.addEventListener("click", () => {
+    store.activeTaskId = null;
+    store.selectedVariant = "wechat";
+    store.sidebarMode = "tasks";
+    store.accountMenuOpen = false;
+    render();
+  });
+
+  document.querySelector("[data-action='search']")?.addEventListener("click", () => {
+    store.sidebarMode = "search";
+    store.accountMenuOpen = false;
+    render();
+    document.querySelector(".search-form input")?.focus();
+  });
+
+  document.querySelector("[data-action='search-form']")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+  });
+
+  document.querySelector(".search-form input")?.addEventListener("input", (event) => {
+    store.searchQuery = event.target.value;
+    render();
+    const input = document.querySelector(".search-form input");
+    input?.focus();
+    input?.setSelectionRange(input.value.length, input.value.length);
+  });
+
+  document.querySelector("[data-action='clear-search']")?.addEventListener("click", () => {
+    store.searchQuery = "";
+    render();
+    document.querySelector(".search-form input")?.focus();
+  });
+
+  document.querySelectorAll("[data-task-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.activeTaskId = button.dataset.taskId;
+      store.selectedVariant = "wechat";
+      store.previewMode = "file";
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-preview-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.previewMode = button.dataset.previewMode;
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-open-preview-task]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.activeTaskId = button.dataset.openPreviewTask;
+      store.selectedVariant = "wechat";
+      store.previewMode = "file";
+      render();
+    });
+  });
+
+  document.querySelector("[data-action='run-task']")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (store.isRunning) return;
+    const goal = new FormData(event.currentTarget).get("goal").toString().trim();
+    if (!goal) return;
+
+    const activeTask = getActiveTask();
+    store.isRunning = true;
+    render();
+
+    const harness = new WorkflowHarness(
+      {
+        tools,
+        publishers,
+        renderMarkdown,
+        backendConfig: store.backendConfig
+      },
+      (nextState) => {
+        upsertTask(nextState);
+        render();
+      }
+    );
+
+    try {
+      if (activeTask) {
+        await harness.continueConversation(activeTask, goal);
+      } else {
+        const task = createTaskState(goal);
+        store.activeTaskId = task.taskId;
+        upsertTask(task);
+        await harness.run(task);
+      }
+    } finally {
+      store.isRunning = false;
+      persistTasks();
+      render();
+    }
+  });
+
+  document.querySelector("[data-action='revise']")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const task = getActiveTask();
+    if (!task || store.isRunning) return;
+    const instruction = new FormData(event.currentTarget).get("instruction").toString().trim();
+    if (!instruction) return;
+
+    store.isRunning = true;
+    const harness = new WorkflowHarness(
+      {
+        tools,
+        publishers,
+        renderMarkdown,
+        backendConfig: store.backendConfig
+      },
+      (nextState) => {
+        upsertTask(nextState);
+        render();
+      }
+    );
+
+    try {
+      await harness.applyNaturalLanguageRevision(task, instruction);
+    } finally {
+      store.isRunning = false;
+      persistTasks();
+      render();
+    }
+  });
+
+  document.querySelector("[data-action='publish']")?.addEventListener("click", async () => {
+    const task = getActiveTask();
+    if (!task || store.isRunning) return;
+    store.isRunning = true;
+    render();
+
+    const harness = new WorkflowHarness(
+      {
+        tools,
+        publishers,
+        renderMarkdown,
+        backendConfig: store.backendConfig
+      },
+      (nextState) => {
+        upsertTask(nextState);
+        render();
+      }
+    );
+
+    try {
+      await harness.runPublishLoop(task);
+    } finally {
+      store.isRunning = false;
+      persistTasks();
+      render();
+    }
+  });
+
+  document.querySelector("[data-action='copy']")?.addEventListener("click", async () => {
+    const markdown = getCurrentMarkdown();
+    if (markdown) await navigator.clipboard.writeText(markdown);
+  });
+
+  document.querySelector("[data-action='export-md']")?.addEventListener("click", () => {
+    const task = getActiveTask();
+    const markdown = getCurrentMarkdown();
+    if (task && markdown) exportBlob(`${safeFileName(task.outline.title || "viewpull-draft")}.md`, markdown, "text/markdown");
+  });
+
+  document.querySelector("[data-action='export-html']")?.addEventListener("click", () => {
+    const task = getActiveTask();
+    const markdown = getCurrentMarkdown();
+    if (task && markdown) {
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(task.outline.title)}</title></head><body>${renderMarkdown(markdown)}</body></html>`;
+      exportBlob(`${safeFileName(task.outline.title || "viewpull-draft")}.html`, html, "text/html");
+    }
+  });
+
+  document.querySelectorAll("[data-variant]").forEach((button) => {
+    button.addEventListener("click", () => {
+      store.selectedVariant = button.dataset.variant;
+      store.previewMode = "file";
+      render();
+    });
+  });
+
+}
+
+async function testDeepSeekConnection() {
+  if (!store.backendConfig.apiKey) {
+    store.accountNotice = "请先输入并保存 DeepSeek API Key。";
+    render();
+    return;
+  }
+
+  store.accountNotice = "正在测试 DeepSeek 连接...";
+  render();
+
+  const model = new ModelClient(store.backendConfig);
+  const result = await model.chat({
+    system: "你是 ViewPull 的连接测试助手。",
+    messages: [
+      {
+        role: "user",
+        content: "用一句中文确认 DeepSeek 已经接入 ViewPull。"
+      }
+    ],
+    temperature: 0.2
+  });
+
+  store.accountNotice = result.ok
+    ? `DeepSeek 已生效：${result.text.slice(0, 80)}`
+    : `DeepSeek 测试失败：${result.error}`;
+  render();
+}
+
+function getCurrentMarkdown() {
+  const task = getActiveTask();
+  if (!task) return "";
+  const variant = task.draft.variants.find((item) => item.platform === store.selectedVariant);
+  return variant?.markdown || task.draft.markdown;
+}
+
+function getVisibleSidebarTasks() {
+  if (store.sidebarMode !== "search") return store.tasks;
+  const query = store.searchQuery.trim().toLowerCase();
+  if (!query) return store.tasks;
+  return store.tasks.filter((task) => {
+    const values = [
+      task.userInput,
+      task.topic.normalized,
+      task.outline.title,
+      task.status,
+      ...(task.draft.variants || []).map((variant) => `${variant.platform} ${variant.markdown || ""}`)
+    ];
+    return values.some((value) => String(value || "").toLowerCase().includes(query));
+  });
+}
+
+function getPublishedTasks() {
+  return store.tasks.filter((task) => task.status === "done" || (task.publishStatus?.outputs || []).length > 0);
+}
+
+function getReviewTasks() {
+  return store.tasks.filter((task) => ["waiting_approval", "ready"].includes(task.status));
+}
+
+function getActiveTask() {
+  return store.tasks.find((task) => task.taskId === store.activeTaskId) || null;
+}
+
+function upsertTask(task) {
+  const index = store.tasks.findIndex((item) => item.taskId === task.taskId);
+  if (index >= 0) {
+    store.tasks[index] = task;
+  } else {
+    store.tasks.unshift(task);
+  }
+  persistTasks();
+}
+
+async function loadTasksFromDatabase() {
+  const tasks = await contentDatabase.listTasks();
+  return tasks.length ? tasks : loadTasks();
+}
+
+function loadTasks() {
+  try {
+    return JSON.parse(localStorage.getItem("viewpull-tasks") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function persistTasks() {
+  localStorage.setItem("viewpull-tasks", JSON.stringify(store.tasks.slice(0, 20)));
+  for (const task of store.tasks.slice(0, 80)) contentDatabase.putTask(task);
+}
+
+function formatStatus(status) {
+  const labels = {
+    idle: "空闲",
+    running: "运行中",
+    waiting_approval: "待确认",
+    ready: "就绪",
+    publishing: "发布中",
+    done: "完成",
+    failed: "失败"
+  };
+  return labels[status] || status;
+}
+
+function platformLabel(platform) {
+  const labels = {
+    wechat: "文章",
+    xiaohongshu: "视频剧本",
+    markdown: "Markdown",
+    html: "HTML",
+    x: "X",
+    linkedin: "LinkedIn"
+  };
+  return labels[platform] || platform;
+}
+
+function formatTime(value) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(new Date(value));
+}
+
+function safeFileName(value) {
+  return value.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "") || "viewpull-draft";
+}
+
+function displayText(value) {
+  return String(value || "")
+    .replace(/公众号/g, "文章")
+    .replace(/小红书/g, "视频剧本");
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
