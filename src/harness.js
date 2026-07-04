@@ -168,6 +168,7 @@ export class WorkflowHarness {
     this.emit(state);
 
     const reply = await this.generateAssistantReply(state);
+    const nextMarkdown = await this.buildConversationDocument(state, instruction, reply);
     state = applyStatePatch(state, {
       status: WORKFLOW_STATUS.READY,
       currentNode: null,
@@ -180,9 +181,25 @@ export class WorkflowHarness {
               createdAt: new Date().toISOString()
             }
           : message
-      ))
+      )),
+      draft: {
+        ...state.draft,
+        markdown: nextMarkdown,
+        variants: updateDraftVariants(state.draft.variants, nextMarkdown),
+        currentVersion: state.draft.currentVersion + 1,
+        editHistory: [
+          ...(state.draft.editHistory || []),
+          {
+            type: shouldRewriteDocument(instruction) ? "assistant_document_revision" : "assistant_reply_snapshot",
+            instruction,
+            createdAt: new Date().toISOString()
+          }
+        ]
+      }
     });
     state = appendLog(state, "Assistant replied", { level: "success" });
+    this.context.document.saveDraftSet(state, state.draft);
+    this.context.checkpointer.save(state.taskId, state, { phase: "assistant_document_update" });
     this.context.memory.rememberTask(state, "assistant.chat");
     this.emit(state);
     return state;
@@ -226,14 +243,52 @@ export class WorkflowHarness {
         content: message.content
       }));
 
+    const contextualMessages = [
+      ...(state.draft.markdown
+        ? [
+            {
+              role: "user",
+              content: `当前右侧文档内容如下，后续如果用户要求修改或继续处理，请以它为准：\n\n${state.draft.markdown}`
+            }
+          ]
+        : []),
+      ...chatMessages
+    ];
+
     const result = await this.context.model.chat({
-      system: "你是 ViewPull 的个人 AI 助手。正常对话时直接回答用户，不要默认修改文章。回答使用中文，简洁但有帮助。",
-      messages: chatMessages,
+      system: [
+        "你是 ViewPull 的个人 AI 助手。正常对话时直接回答用户，不要默认修改文章。回答使用中文，简洁但有帮助。",
+        state.draft.markdown
+          ? "当前右侧文档会作为上下文提供。用户要求修改、整理、续写、扩写、缩短或转格式时，请基于当前右侧文档回答。"
+          : ""
+      ].filter(Boolean).join("\n"),
+      messages: contextualMessages,
       temperature: 0.7
     });
 
     if (result.ok && result.text.trim()) return result.text.trim();
     return `我现在没能成功调用模型：${result.error || "未知错误"}。`;
+  }
+
+  async buildConversationDocument(state, instruction, reply) {
+    const currentMarkdown = String(state.draft.markdown || "").trim();
+    if (!currentMarkdown || !shouldRewriteDocument(instruction) || !this.context.model.configured) {
+      return normalizeDocumentMarkdown(reply);
+    }
+
+    const result = await this.context.model.chat({
+      system: "你是 ViewPull 的文档编辑器。基于当前右侧 Markdown 文档和用户最新要求，输出更新后的完整 Markdown。只输出 Markdown 正文，不要解释过程。",
+      messages: [
+        {
+          role: "user",
+          content: `当前右侧文档：\n\n${currentMarkdown}\n\n用户最新要求：${instruction}\n\n助手对话回复：\n\n${reply}\n\n请输出更新后的完整 Markdown。`
+        }
+      ],
+      temperature: 0.5
+    });
+
+    if (result.ok && result.text.trim()) return normalizeDocumentMarkdown(result.text);
+    return normalizeDocumentMarkdown(reply);
   }
 
   async runResearchLoop(initialState) {
@@ -319,4 +374,15 @@ function updateDraftVariants(variants = [], markdown) {
         }
       : variant
   ));
+}
+
+function shouldRewriteDocument(instruction) {
+  return /修改|改成|重写|润色|扩写|缩短|更新|调整|续写|改写|优化|整理成|生成|写一篇|写成|转成|变成|加入|删除|替换/i.test(instruction);
+}
+
+function normalizeDocumentMarkdown(value) {
+  const markdown = String(value || "").trim();
+  if (!markdown) return "";
+  if (/^#{1,6}\s/m.test(markdown)) return markdown;
+  return `# ViewPull 回复\n\n${markdown}`;
 }
