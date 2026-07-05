@@ -931,6 +931,56 @@ input:disabled {
   font-size: 14px;
 }
 
+.publisher-panel {
+  width: min(420px, calc(100vw - 28px));
+}
+
+.publisher-status-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.publisher-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #1b1b1b;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.publisher-status-row strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.account-form select {
+  width: 100%;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: 0;
+  background: #1b1b1b;
+  color: var(--text);
+}
+
+.checkbox-label {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  color: var(--muted);
+}
+
+.checkbox-label input {
+  width: 16px;
+  height: 16px;
+}
+
 .agent-actions,
 .approval-actions {
   display: flex;

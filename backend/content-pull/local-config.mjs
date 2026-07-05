@@ -54,19 +54,20 @@ export async function savePublisherConnection(connection = {}) {
   if (!webhookUrl && platform !== "wechat") return { ok: false, error: "webhookUrl is required" };
 
   const config = await loadLocalConfig();
+  const currentConnection = config.publishers?.[platform] || {};
   const publishers = {
     ...(config.publishers || {}),
     [platform]: {
       platform,
-      name: String(connection.name || platform).trim(),
-      webhookUrl,
-      apiKey: String(connection.apiKey || "").trim(),
-      appId: String(connection.appId || "").trim(),
-      appSecret: String(connection.appSecret || "").trim(),
-      accessToken: String(connection.accessToken || "").trim(),
-      thumbMediaId: String(connection.thumbMediaId || "").trim(),
-      author: String(connection.author || "").trim(),
-      contentSourceUrl: String(connection.contentSourceUrl || "").trim(),
+      name: keepExisting(connection.name, currentConnection.name, platform),
+      webhookUrl: keepExisting(connection.webhookUrl, currentConnection.webhookUrl, ""),
+      apiKey: keepExisting(connection.apiKey, currentConnection.apiKey, ""),
+      appId: keepExisting(connection.appId, currentConnection.appId, ""),
+      appSecret: keepExisting(connection.appSecret, currentConnection.appSecret, ""),
+      accessToken: keepExisting(connection.accessToken, currentConnection.accessToken, ""),
+      thumbMediaId: keepExisting(connection.thumbMediaId, currentConnection.thumbMediaId, ""),
+      author: keepExisting(connection.author, currentConnection.author, ""),
+      contentSourceUrl: keepExisting(connection.contentSourceUrl, currentConnection.contentSourceUrl, ""),
       autoPublish: Boolean(connection.autoPublish),
       updatedAt: new Date().toISOString()
     }
@@ -121,4 +122,10 @@ function applyLocalConfig(config) {
   if (localKey && !CONTENT_PULL_BACKEND.deepseek.apiKey) {
     CONTENT_PULL_BACKEND.deepseek.apiKey = localKey;
   }
+}
+
+function keepExisting(nextValue, currentValue, fallback = "") {
+  const next = String(nextValue || "").trim();
+  if (next) return next;
+  return String(currentValue || fallback || "").trim();
 }

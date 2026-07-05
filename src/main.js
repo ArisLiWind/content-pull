@@ -16,6 +16,8 @@ import {
   rejectLocalAgentRequest,
   saveAccountSession,
   saveBackendConfig,
+  loadPublisherConnections,
+  savePublisherConnection,
   syncDeepSeekApiKeyToBackend
 } from "./backend.js";
 import { contentDatabase, migrateLegacyLocalStorage } from "./database.js";
@@ -40,6 +42,7 @@ const store = {
   backendConfig: loadBackendConfig(),
   backendStatus: createBackendStatus(),
   localAgent: createLocalAgentPanelState(),
+  publisherConnections: [],
   accountNotice: "",
   hasUpdate: false
 };
@@ -147,6 +150,7 @@ function renderAccountMenu() {
   if (store.accountView === "settings") return renderSettingsPanel();
   if (store.accountView === "backend") return renderBackendStatusPanel();
   if (store.accountView === "local-agent") return renderLocalAgentPanel();
+  if (store.accountView === "publishers") return renderPublisherConnectionsPanel();
   if (store.accountView === "profile") return renderSimpleAccountPanel("个人资料", "创作者账号已连接本地 Content Agent。");
   if (store.accountView === "invite") return renderSimpleAccountPanel("邀请好友", "邀请链接会在接入正式后端后生成。");
   if (store.accountView === "quota") return renderSimpleAccountPanel("剩余用量", "本地预览：30 / 100 次 Agent Run。");
@@ -162,6 +166,7 @@ function renderAccountMenu() {
         <button data-account-view="settings" type="button">设置</button>
         <button data-account-view="backend" type="button">后端状态</button>
         <button data-account-view="local-agent" type="button">本地 Agent</button>
+        <button data-account-view="publishers" type="button">发布连接</button>
         <button data-account-view="invite" type="button">邀请好友</button>
         <button data-account-view="quota" type="button">剩余用量</button>
         <button data-action="account-logout" type="button">退出登录</button>
@@ -279,6 +284,90 @@ function renderLocalAgentPanel() {
           .map((event) => `<p class="audit-line">${escapeHtml(event.type)} · ${formatTime(event.createdAt)}</p>`)
           .join("") || `<p class="account-panel-copy">暂无审计事件。</p>`}
       </div>
+      ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
+    </div>
+  `;
+}
+
+function renderPublisherConnectionsPanel() {
+  const wechat = store.publisherConnections.find((connection) => connection.platform === "wechat") || {};
+  const webhook = store.publisherConnections.filter((connection) => connection.platform !== "wechat");
+
+  return `
+    <div class="account-menu account-menu-large publisher-panel">
+      <div class="account-panel-head">
+        <button class="account-back" data-action="account-back" type="button">‹</button>
+        <strong>发布连接</strong>
+      </div>
+
+      <div class="publisher-status-list">
+        <div class="publisher-status-row">
+          <span>微信文章</span>
+          <strong>${wechat.hasWechatApp || wechat.hasWechatAccessToken ? "已连接" : "待配置"}</strong>
+        </div>
+        <div class="publisher-status-row">
+          <span>封面素材</span>
+          <strong>${wechat.hasThumbMediaId ? "已配置" : "需要 thumbMediaId"}</strong>
+        </div>
+        ${webhook
+          .map((connection) => `
+            <div class="publisher-status-row">
+              <span>${escapeHtml(platformLabel(connection.platform))}</span>
+              <strong>${connection.webhookUrl ? "Webhook 已连接" : "待配置"}</strong>
+            </div>
+          `)
+          .join("")}
+      </div>
+
+      <form class="account-form" data-action="save-publisher-connection">
+        <input name="platform" type="hidden" value="wechat" />
+        <label>
+          微信 AppID
+          <input name="appId" placeholder="公众号 AppID" autocomplete="off" />
+        </label>
+        <label>
+          微信 AppSecret
+          <input name="appSecret" type="password" placeholder="${wechat.hasWechatApp ? "已保存，留空则不覆盖" : "公众号 AppSecret"}" autocomplete="off" />
+        </label>
+        <label>
+          Access Token
+          <input name="accessToken" type="password" placeholder="${wechat.hasWechatAccessToken ? "已保存，留空则不覆盖" : "可选，通常使用 AppID/AppSecret 自动获取"}" autocomplete="off" />
+        </label>
+        <label>
+          封面素材 thumbMediaId
+          <input name="thumbMediaId" placeholder="${wechat.hasThumbMediaId ? "已保存，留空则不覆盖" : "微信永久素材 media_id"}" autocomplete="off" />
+        </label>
+        <label>
+          作者
+          <input name="author" placeholder="Content Pull" autocomplete="off" />
+        </label>
+        <label class="checkbox-label">
+          <input name="autoPublish" type="checkbox" ${wechat.autoPublish ? "checked" : ""} />
+          创建草稿后自动提交发布
+        </label>
+        <button class="account-primary" type="submit">保存微信连接</button>
+      </form>
+
+      <form class="account-form" data-action="save-publisher-connection">
+        <label>
+          平台
+          <select name="platform">
+            <option value="x">X / Twitter</option>
+            <option value="linkedin">LinkedIn</option>
+            <option value="xiaohongshu">视频剧本 Webhook</option>
+          </select>
+        </label>
+        <label>
+          Webhook URL
+          <input name="webhookUrl" placeholder="https://..." autocomplete="off" />
+        </label>
+        <label>
+          API Key
+          <input name="apiKey" type="password" placeholder="可选" autocomplete="off" />
+        </label>
+        <button class="account-secondary" type="submit">保存 Webhook 连接</button>
+      </form>
+
       ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
     </div>
   `;
@@ -527,6 +616,7 @@ function bindEvents() {
       store.accountNotice = "";
       render();
       if (button.dataset.accountView === "local-agent") refreshLocalAgentPanel();
+      if (button.dataset.accountView === "publishers") refreshPublisherConnections();
       return;
     }
 
@@ -600,6 +690,14 @@ function bindEvents() {
       ? "DeepSeek API Key 已保存，并已同步到后端。"
       : `DeepSeek API Key 已保存到前端，但同步后端失败：${result.error}`;
     render();
+  });
+
+  document.querySelectorAll("[data-action='save-publisher-connection']").forEach((formEl) => {
+    formEl.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      await savePublisherConnectionFromForm(form);
+    });
   });
 
   document.querySelector("[data-action='new-task']")?.addEventListener("click", () => {
@@ -814,6 +912,41 @@ async function testDeepSeekConnection() {
     ? `DeepSeek 已生效：${result.text.slice(0, 80)}`
     : `DeepSeek 测试失败：${result.error}`;
   render();
+}
+
+async function refreshPublisherConnections() {
+  store.accountNotice = "正在读取发布连接...";
+  render();
+
+  const result = await loadPublisherConnections();
+  if (!result.ok) {
+    store.accountNotice = `读取发布连接失败：${result.error}`;
+  } else {
+    store.publisherConnections = result.connections || [];
+    store.accountNotice = "发布连接已更新。";
+  }
+  render();
+}
+
+async function savePublisherConnectionFromForm(form) {
+  store.accountNotice = "正在保存发布连接...";
+  render();
+
+  const payload = {
+    platform: String(form.get("platform") || "").trim(),
+    webhookUrl: String(form.get("webhookUrl") || "").trim(),
+    apiKey: String(form.get("apiKey") || "").trim(),
+    appId: String(form.get("appId") || "").trim(),
+    appSecret: String(form.get("appSecret") || "").trim(),
+    accessToken: String(form.get("accessToken") || "").trim(),
+    thumbMediaId: String(form.get("thumbMediaId") || "").trim(),
+    author: String(form.get("author") || "").trim(),
+    autoPublish: form.get("autoPublish") === "on"
+  };
+
+  const result = await savePublisherConnection(payload);
+  store.accountNotice = result.ok ? "发布连接已保存。发布按钮会自动使用该连接。" : `保存失败：${result.error}`;
+  await refreshPublisherConnections();
 }
 
 async function refreshLocalAgentPanel() {

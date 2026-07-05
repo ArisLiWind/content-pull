@@ -97,6 +97,18 @@ export async function loadLocalAgentPanelData() {
   };
 }
 
+export async function loadPublisherConnections() {
+  const result = await backendJson("/config/publishers");
+  return result.ok === false ? result : { ok: true, connections: result.connections || [] };
+}
+
+export async function savePublisherConnection(connection) {
+  return backendJson("/config/publishers", {
+    method: "POST",
+    body: connection
+  });
+}
+
 export async function approveLocalAgentRequest(id) {
   return backendJson("/local-agent/approvals/approve", {
     method: "POST",
