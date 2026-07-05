@@ -5,6 +5,7 @@ import { approveRequest, callLocalAgentTool, getLocalAgentStatus, listApprovals,
 import { callMcpTool, handleMcpJsonRpc, listMcpTools } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
 import { publishToExternalApp } from "./publishers.mjs";
+import { searchWeb } from "./search.mjs";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -155,6 +156,12 @@ async function route(request, response) {
 
     const result = await publishToExternalApp(platform, body.content || {}, body.metadata || {});
     return sendJson(response, result.ok ? 200 : result.status === "requires_connection" ? 409 : 400, result);
+  }
+
+  if (request.method === "POST" && url.pathname === "/search") {
+    const body = await readJson(request);
+    const result = await searchWeb(body.query, { limit: Number(body.limit) || 5 });
+    return sendJson(response, result.ok ? 200 : 400, result);
   }
 
   if (request.method === "POST" && url.pathname === "/mcp") {

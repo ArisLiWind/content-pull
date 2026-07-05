@@ -1,6 +1,7 @@
 import { CONTENT_PULL_BACKEND } from "./config.mjs";
 import { callLocalAgentTool, listLocalAgentTools } from "./local-agent.mjs";
 import { publishToExternalApp } from "./publishers.mjs";
+import { formatSearchResults, searchWeb } from "./search.mjs";
 
 const memoryStore = new Map();
 const fileStore = new Map();
@@ -8,11 +9,24 @@ const fileStore = new Map();
 const tools = [
   {
     name: "content.research",
-    description: "Create source-aware research notes for a Content Pull drafting task.",
+    description: "Search the web and create source-aware research notes for a Content Pull drafting task.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string" }
+        query: { type: "string" },
+        limit: { type: "number" }
+      },
+      required: ["query"]
+    }
+  },
+  {
+    name: "web.search",
+    description: "Search the public web and return structured source results.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" }
       },
       required: ["query"]
     }
@@ -85,7 +99,7 @@ export function checkMcpRuntime() {
     endpoint: CONTENT_PULL_BACKEND.openclaw.mcpEndpoint,
     memoryNamespace: CONTENT_PULL_BACKEND.memory.namespace,
     tools: tools.map((tool) => tool.name),
-    capabilities: ["planning", "tool-calling", "memory", "filesystem", "document", "publisher"]
+    capabilities: ["planning", "tool-calling", "memory", "filesystem", "document", "web-search", "publisher"]
   };
 }
 
@@ -115,16 +129,30 @@ export async function callMcpTool(name, args = {}) {
 
   if (name === "content.research") {
     const query = String(args.query || "").trim();
+    const result = await searchWeb(query, { limit: Number(args.limit) || 5 });
     return {
-      ok: true,
+      ok: result.ok,
       content: [
         {
           type: "text",
-          text: [
-            `Research query: ${query}`,
-            "Content Pull embedded OpenClaw-compatible backend prepared a research task.",
-            "Use DeepSeek for language reasoning, MCP tools for memory/files/document/publisher orchestration, and human approval before publish."
-          ].join("\n")
+          text: formatSearchResults(result)
+        },
+        {
+          type: "json",
+          json: result
+        }
+      ]
+    };
+  }
+
+  if (name === "web.search") {
+    const result = await searchWeb(args.query, { limit: Number(args.limit) || 5 });
+    return {
+      ok: result.ok,
+      content: [
+        {
+          type: "json",
+          json: result
         }
       ]
     };

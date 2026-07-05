@@ -104,6 +104,20 @@ const localTools = [
     }
   },
   {
+    name: "local.chrome.search_web",
+    description: "Search the web in a Chrome tab and extract visible result links through Chrome DevTools Protocol.",
+    risk: "medium",
+    requiresApproval: false,
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "number" }
+      },
+      required: ["query"]
+    }
+  },
+  {
     name: "local.app.open",
     description: "Open a local macOS application by name.",
     risk: "medium",
@@ -193,7 +207,7 @@ export function getLocalAgentStatus() {
       {
         id: "chrome-cdp",
         name: "Chrome CDP",
-        requiredFor: ["local.chrome.open_tab", "local.chrome.read_dom", "local.chrome.click", "local.chrome.type", "local.chrome.screenshot"],
+        requiredFor: ["local.chrome.open_tab", "local.chrome.read_dom", "local.chrome.click", "local.chrome.type", "local.chrome.screenshot", "local.chrome.search_web"],
         status: "requires-chrome-debug-port",
         endpoint: chromeDebugBaseUrl
       },
@@ -386,6 +400,15 @@ async function executeLocalTool(name, input) {
     return { ok: true, tab: publicChromeTab(tab), mimeType: "image/png", data };
   }
 
+  if (name === "local.chrome.search_web") {
+    const query = String(input.query || "").trim();
+    if (!query) return { ok: false, error: "query is required" };
+    const limit = Math.max(1, Math.min(10, Number(input.limit) || 5));
+    const tab = await openChromeSearchTab(query);
+    const results = await extractSearchResultsFromChrome(tab, limit);
+    return { ok: results.length > 0, query, source: "chrome-cdp", tab: publicChromeTab(tab), results };
+  }
+
   if (name === "local.app.open") {
     const appName = String(input.name || "").trim();
     if (!appName) return { ok: false, error: "name is required" };
@@ -556,6 +579,50 @@ function publicChromeTab(tab = {}) {
     url: tab.url || "",
     type: tab.type || "page"
   };
+}
+
+async function openChromeSearchTab(query) {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  await openChromeTab(url);
+  await sleep(2500);
+  return selectChromeTab({ urlIncludes: "duckduckgo.com" });
+}
+
+async function extractSearchResultsFromChrome(tab, limit) {
+  const expression = `
+    (() => {
+      const anchors = Array.from(document.querySelectorAll('a[href]'));
+      const ignoredHosts = new Set(['duckduckgo.com', 'www.duckduckgo.com', 'html.duckduckgo.com', 'apps.apple.com', 'play.google.com']);
+      const rows = [];
+      for (const anchor of anchors) {
+        const text = (anchor.innerText || anchor.textContent || '').replace(/\\s+/g, ' ').trim();
+        let href = anchor.href || '';
+        if (!text || text.length < 4 || !href.startsWith('http')) continue;
+        try {
+          const parsed = new URL(href);
+          const uddg = parsed.searchParams.get('uddg');
+          if (uddg) href = decodeURIComponent(uddg);
+          const target = new URL(href);
+          if (ignoredHosts.has(target.hostname)) continue;
+          if (/duckduckgo\\.com\\/y\\.js/i.test(href)) continue;
+          if (/duckduckgo private browser/i.test(text)) continue;
+        } catch {}
+        if (rows.some((item) => item.url === href)) continue;
+        rows.push({ title: text, url: href, snippet: '' });
+        if (rows.length >= ${JSON.stringify(limit)}) break;
+      }
+      return rows;
+    })()
+  `;
+  const result = await runCdp(tab.webSocketDebuggerUrl, [
+    { method: "Runtime.enable" },
+    { method: "Runtime.evaluate", params: { expression, returnByValue: true } }
+  ]);
+  return result.at(-1)?.result?.result?.value || [];
+}
+
+function sleep(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 }
 
 function recordAudit(type, data = {}) {

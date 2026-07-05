@@ -71,10 +71,26 @@ Backend routes:
 
 - `GET /health` checks backend configuration and OpenClaw-compatible runtime status
 - `GET /openclaw/status` reports embedded or remote OpenClaw status
+- `POST /search` searches the web; it falls back to Chrome CDP when direct backend fetch is blocked
 - `POST /mcp` exposes MCP-style tool calls
 - `POST /deepseek/chat` proxies assistant conversation calls to DeepSeek
 - `POST /deepseek/test` confirms DeepSeek connectivity
 - `POST /agent/research` routes research through OpenClaw first, then DeepSeek fallback
+- `POST /publish` sends prepared content to configured external app webhooks
+
+Chrome browser control requires a Chrome instance with DevTools Protocol enabled:
+
+```bash
+open -n -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/content-pull-chrome-cdp http://127.0.0.1:3032
+```
+
+External publishing uses local webhook connections:
+
+```bash
+curl -X POST http://127.0.0.1:8788/config/publishers \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"wechat","name":"WeChat Draft Gateway","webhookUrl":"https://example.com/content-pull/publish"}'
+```
 
 For a remote OpenClaw-compatible deployment:
 

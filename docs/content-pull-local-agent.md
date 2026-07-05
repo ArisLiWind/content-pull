@@ -21,12 +21,22 @@ Content Pull UI
 - `GET /local-agent/approvals`
 - `POST /local-agent/approvals`
 - `POST /local-agent/approvals/approve`
+- `POST /local-agent/approvals/reject`
 - `GET /local-agent/audit`
+- `POST /search`
+- `POST /publish`
 
 ## Tools
 
 - `local.permissions.status`
 - `local.browser.open`
+- `local.chrome.status`
+- `local.chrome.open_tab`
+- `local.chrome.read_dom`
+- `local.chrome.click`
+- `local.chrome.type`
+- `local.chrome.screenshot`
+- `local.chrome.search_web`
 - `local.app.open`
 - `local.app.applescript`
 - `local.filesystem.read`
@@ -55,3 +65,19 @@ The current filesystem tool is intentionally workspace-confined.
 5. The result is written to the audit log.
 
 This gives Content Pull an OpenClaw-style local execution boundary without silently taking over the machine.
+
+## Chrome CDP
+
+Chrome control is real only when Chrome is started with a DevTools Protocol port:
+
+```bash
+open -n -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp/content-pull-chrome-cdp http://127.0.0.1:3032
+```
+
+When connected, Content Pull can open tabs, read DOM text, search the web through the browser, click selectors, type text, and capture screenshots. Click/type tools still require human approval.
+
+## Search And Publish
+
+`web.search` and `content.research` first try backend HTTP search. If outbound fetch is blocked, they fall back to `local.chrome.search_web` through Chrome CDP.
+
+Publishing is intentionally connector-based. Add a platform webhook with `POST /config/publishers`, then call `publisher.publish` or `POST /publish`. For platforms without official APIs, the next layer should use Chrome CDP or desktop automation after user approval.
