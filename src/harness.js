@@ -138,6 +138,12 @@ export class WorkflowHarness {
   }
 
   async continueConversation(initialState, instruction, { appendUser = true } = {}) {
+    if (isCompletedDuplicateTurn(initialState, instruction)) {
+      const state = appendLog(initialState, "Skipped duplicate completed turn", { level: "success" });
+      this.emit(state);
+      return state;
+    }
+
     let state = appendLog(initialState, `User message: ${instruction}`);
     const now = new Date().toISOString();
     const messages = [
@@ -168,7 +174,27 @@ export class WorkflowHarness {
     this.emit(state);
 
     const reply = await this.generateAssistantReply(state);
-    const nextMarkdown = await this.buildConversationDocument(state, instruction, reply);
+    const shouldUpdateDocument = shouldUpdateDocumentFromConversation(state, instruction);
+    const nextMarkdown = shouldUpdateDocument
+      ? await this.buildConversationDocument(state, instruction, reply)
+      : state.draft.markdown;
+    const nextDraft = shouldUpdateDocument
+      ? {
+          ...state.draft,
+          markdown: nextMarkdown,
+          variants: updateDraftVariants(state.draft.variants, nextMarkdown),
+          currentVersion: state.draft.currentVersion + 1,
+          editHistory: [
+            ...(state.draft.editHistory || []),
+            {
+              type: hasExistingDocument(state) ? "assistant_document_revision" : "assistant_document_created",
+              instruction,
+              createdAt: new Date().toISOString()
+            }
+          ]
+        }
+      : state.draft;
+
     state = applyStatePatch(state, {
       status: WORKFLOW_STATUS.READY,
       currentNode: null,
@@ -182,24 +208,17 @@ export class WorkflowHarness {
             }
           : message
       )),
-      draft: {
-        ...state.draft,
-        markdown: nextMarkdown,
-        variants: updateDraftVariants(state.draft.variants, nextMarkdown),
-        currentVersion: state.draft.currentVersion + 1,
-        editHistory: [
-          ...(state.draft.editHistory || []),
-          {
-            type: shouldRewriteDocument(instruction) ? "assistant_document_revision" : "assistant_reply_snapshot",
-            instruction,
-            createdAt: new Date().toISOString()
-          }
-        ]
+      draft: nextDraft,
+      selfCheck: {
+        lastInstruction: normalizeInstruction(instruction),
+        status: "completed",
+        documentUpdated: shouldUpdateDocument,
+        completedAt: new Date().toISOString()
       }
     });
-    state = appendLog(state, "Assistant replied", { level: "success" });
-    this.context.document.saveDraftSet(state, state.draft);
-    this.context.checkpointer.save(state.taskId, state, { phase: "assistant_document_update" });
+    state = appendLog(state, shouldUpdateDocument ? "Assistant replied and updated document" : "Assistant replied without document update", { level: "success" });
+    if (shouldUpdateDocument) this.context.document.saveDraftSet(state, state.draft);
+    this.context.checkpointer.save(state.taskId, state, { phase: shouldUpdateDocument ? "assistant_document_update" : "assistant_chat" });
     this.context.memory.rememberTask(state, "assistant.chat");
     this.emit(state);
     return state;
@@ -272,8 +291,20 @@ export class WorkflowHarness {
 
   async buildConversationDocument(state, instruction, reply) {
     const currentMarkdown = String(state.draft.markdown || "").trim();
-    if (!currentMarkdown || !shouldRewriteDocument(instruction) || !this.context.model.configured) {
+    if (!currentMarkdown) {
       return normalizeDocumentMarkdown(reply);
+    }
+
+    if (!shouldRewriteDocument(instruction)) return currentMarkdown;
+
+    if (!this.context.model.configured) {
+      return `${currentMarkdown}
+
+## 待模型连接后继续修改
+
+用户要求：${instruction}
+
+当前模型未连接，Content Pull 已保留原文，等待模型可用后再执行语义改写。`;
     }
 
     const result = await this.context.model.chat({
@@ -378,6 +409,32 @@ function updateDraftVariants(variants = [], markdown) {
 
 function shouldRewriteDocument(instruction) {
   return /修改|改成|重写|润色|扩写|缩短|更新|调整|续写|改写|优化|整理成|生成|写一篇|写成|转成|变成|加入|删除|替换/i.test(instruction);
+}
+
+function shouldUpdateDocumentFromConversation(state, instruction) {
+  const text = String(instruction || "");
+  const hasDocument = hasExistingDocument(state);
+  if (hasDocument && /修改|改成|重写|润色|扩写|缩短|更新|调整|续写|改写|优化|转成|变成|加入|删除|替换|继续写|补充到|写进/i.test(text)) {
+    return true;
+  }
+  return /写一篇|写成|生成.*(文章|草稿|文案|稿件|正文|Markdown)|整理成.*(文章|草稿|文档|正文)|输出.*(文章|草稿|Markdown)|发布稿|文章内容|正文内容|公众号文章|微信文章/i.test(text);
+}
+
+function hasExistingDocument(state) {
+  return Boolean(String(state?.draft?.markdown || "").trim());
+}
+
+function isCompletedDuplicateTurn(state, instruction) {
+  const normalized = normalizeInstruction(instruction);
+  return Boolean(
+    normalized
+    && state?.selfCheck?.status === "completed"
+    && state.selfCheck.lastInstruction === normalized
+  );
+}
+
+function normalizeInstruction(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
 }
 
 function normalizeDocumentMarkdown(value) {

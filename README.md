@@ -92,6 +92,16 @@ curl -X POST http://127.0.0.1:8788/config/publishers \
   -d '{"platform":"wechat","name":"WeChat Draft Gateway","webhookUrl":"https://example.com/content-pull/publish"}'
 ```
 
+WeChat Official Account publishing can also use the official API directly. The first version creates a draft; set `autoPublish` only when the account is ready for API publishing:
+
+```bash
+curl -X POST http://127.0.0.1:8788/config/publishers \
+  -H "Content-Type: application/json" \
+  -d '{"platform":"wechat","name":"WeChat Official Account","appId":"...","appSecret":"...","thumbMediaId":"...","author":"Content Pull","autoPublish":false}'
+```
+
+`thumbMediaId` is required by WeChat for the article cover image. Without it, Content Pull will stop safely with `requires_connection` instead of pretending the article was published.
+
 For a remote OpenClaw-compatible deployment:
 
 ```bash

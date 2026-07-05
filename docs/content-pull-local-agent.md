@@ -81,3 +81,13 @@ When connected, Content Pull can open tabs, read DOM text, search the web throug
 `web.search` and `content.research` first try backend HTTP search. If outbound fetch is blocked, they fall back to `local.chrome.search_web` through Chrome CDP.
 
 Publishing is intentionally connector-based. Add a platform webhook with `POST /config/publishers`, then call `publisher.publish` or `POST /publish`. For platforms without official APIs, the next layer should use Chrome CDP or desktop automation after user approval.
+
+## WeChat Official Account
+
+Content Pull has started a direct WeChat Official Account connector:
+
+- `POST /config/publishers` with `platform: "wechat"` stores `appId`, `appSecret`, optional `accessToken`, `thumbMediaId`, `author`, `contentSourceUrl`, and `autoPublish`.
+- `POST /publish` with `platform: "wechat"` creates a WeChat draft through `/cgi-bin/draft/add`.
+- If `autoPublish` is true, Content Pull submits the draft through `/cgi-bin/freepublish/submit`.
+
+WeChat requires a cover image material id (`thumbMediaId`) for article drafts. Image upload/material management is the next connector step.

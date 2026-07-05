@@ -50,7 +50,7 @@ input:disabled {
 
 .workspace {
   display: grid;
-  grid-template-columns: 310px minmax(360px, 1fr) 390px;
+  grid-template-columns: 310px minmax(360px, 1fr) 8px 390px;
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -70,6 +70,39 @@ input:disabled {
   flex-direction: column;
   padding: 18px 16px 16px;
   background: #111;
+}
+
+.panel-resizer {
+  position: relative;
+  z-index: 5;
+  min-width: 8px;
+  border-right: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  background: #101010;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.panel-resizer::after {
+  position: absolute;
+  top: 24px;
+  bottom: 24px;
+  left: 50%;
+  width: 3px;
+  border-radius: 999px;
+  background: transparent;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.panel-resizer:hover::after,
+.is-resizing-preview .panel-resizer::after {
+  background: #ff4f4f;
+}
+
+.is-resizing-preview {
+  cursor: col-resize;
+  user-select: none;
 }
 
 .window-controls {
@@ -956,7 +989,7 @@ input:disabled {
 
 @media (max-width: 1180px) {
   .workspace {
-    grid-template-columns: 260px minmax(360px, 1fr) 330px;
+    grid-template-columns: 260px minmax(360px, 1fr) 8px 330px;
   }
 
   .thread {
@@ -988,6 +1021,10 @@ input:disabled {
     height: auto;
     min-height: 100vh;
     overflow: visible;
+  }
+
+  .panel-resizer {
+    display: none;
   }
 
   .sidebar,

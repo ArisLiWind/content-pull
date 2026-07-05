@@ -51,7 +51,7 @@ export async function savePublisherConnection(connection = {}) {
   const platform = String(connection.platform || "").trim();
   const webhookUrl = String(connection.webhookUrl || "").trim();
   if (!platform) return { ok: false, error: "platform is required" };
-  if (!webhookUrl) return { ok: false, error: "webhookUrl is required" };
+  if (!webhookUrl && platform !== "wechat") return { ok: false, error: "webhookUrl is required" };
 
   const config = await loadLocalConfig();
   const publishers = {
@@ -61,6 +61,13 @@ export async function savePublisherConnection(connection = {}) {
       name: String(connection.name || platform).trim(),
       webhookUrl,
       apiKey: String(connection.apiKey || "").trim(),
+      appId: String(connection.appId || "").trim(),
+      appSecret: String(connection.appSecret || "").trim(),
+      accessToken: String(connection.accessToken || "").trim(),
+      thumbMediaId: String(connection.thumbMediaId || "").trim(),
+      author: String(connection.author || "").trim(),
+      contentSourceUrl: String(connection.contentSourceUrl || "").trim(),
+      autoPublish: Boolean(connection.autoPublish),
       updatedAt: new Date().toISOString()
     }
   };
@@ -101,6 +108,10 @@ function publicPublisherConnection(connection = {}) {
     name: connection.name,
     webhookUrl: connection.webhookUrl,
     hasApiKey: Boolean(connection.apiKey),
+    hasWechatApp: Boolean(connection.appId && connection.appSecret),
+    hasWechatAccessToken: Boolean(connection.accessToken),
+    hasThumbMediaId: Boolean(connection.thumbMediaId),
+    autoPublish: Boolean(connection.autoPublish),
     updatedAt: connection.updatedAt
   };
 }

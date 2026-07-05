@@ -23,6 +23,7 @@ import { contentDatabase, migrateLegacyLocalStorage } from "./database.js";
 const app = document.querySelector("#app");
 const tools = createDefaultToolRouter();
 const publishers = createPublisherRegistry();
+const PREVIEW_WIDTH_KEY = "content-pull-preview-width";
 
 const store = {
   tasks: loadTasks(),
@@ -32,6 +33,7 @@ const store = {
   sidebarMode: "tasks",
   searchQuery: "",
   previewMode: "file",
+  previewWidth: loadPreviewWidth(),
   accountMenuOpen: false,
   accountView: "menu",
   account: loadAccountSession(),
@@ -61,9 +63,10 @@ async function bootstrap() {
 function render() {
   const activeTask = getActiveTask();
   app.innerHTML = `
-    <main class="workspace">
+    <main class="workspace" style="grid-template-columns: 310px minmax(360px, 1fr) 8px ${store.previewWidth}px;">
       ${renderSidebar(activeTask)}
       ${renderMainPanel(activeTask)}
+      <div class="panel-resizer" data-action="resize-preview" title="拖动调整文件栏宽度"></div>
       ${renderPreviewPanel(activeTask)}
     </main>
   `;
@@ -338,7 +341,7 @@ function renderMainPanel(task) {
         <form class="goal-form composer" data-action="run-task">
           <textarea name="goal" rows="3" placeholder="${composerPlaceholder}">${escapeHtml(displayText(composerValue))}</textarea>
           <div class="composer-actions">
-            <span class="composer-meta">${task ? "继续当前对话并更新右侧文件" : "Content Pull / local"}</span>
+            <span class="composer-meta">${task ? "继续当前对话，必要时更新右侧文件" : "Content Pull / local"}</span>
             <button ${store.isRunning ? "disabled" : ""} type="submit">↑</button>
           </div>
         </form>
@@ -377,7 +380,7 @@ function renderMessage(message) {
 function renderPreviewPanel(task) {
   const variants = task?.draft.variants || [];
   const activeVariant = variants.find((variant) => variant.platform === store.selectedVariant) || variants[0];
-  const markdown = activeVariant?.markdown || task?.draft.markdown || "";
+  const markdown = getPreviewMarkdown(task, activeVariant);
   const html = markdown ? renderMarkdown(displayText(markdown)) : "";
   const publishedTasks = getPublishedTasks();
   const reviewTasks = getReviewTasks();
@@ -782,6 +785,7 @@ function bindEvents() {
     });
   });
 
+  bindPreviewResizer();
 }
 
 async function testDeepSeekConnection() {
@@ -865,7 +869,18 @@ function getCurrentMarkdown() {
   const task = getActiveTask();
   if (!task) return "";
   const variant = task.draft.variants.find((item) => item.platform === store.selectedVariant);
-  return variant?.markdown || task.draft.markdown;
+  return getPreviewMarkdown(task, variant);
+}
+
+function getPreviewMarkdown(task, variant) {
+  if (!task) return "";
+  if (isAssistantReplySnapshot(task)) return "";
+  return variant?.markdown || task.draft.markdown || "";
+}
+
+function isAssistantReplySnapshot(task) {
+  const history = task?.draft?.editHistory || [];
+  return history.at(-1)?.type === "assistant_reply_snapshot";
 }
 
 function getVisibleSidebarTasks() {
@@ -922,6 +937,42 @@ function loadTasks() {
 function persistTasks() {
   localStorage.setItem("content-pull-tasks", JSON.stringify(store.tasks.slice(0, 20)));
   for (const task of store.tasks.slice(0, 80)) contentDatabase.putTask(task);
+}
+
+function bindPreviewResizer() {
+  const resizer = document.querySelector("[data-action='resize-preview']");
+  if (!resizer) return;
+
+  resizer.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    resizer.setPointerCapture(event.pointerId);
+    document.body.classList.add("is-resizing-preview");
+
+    const onPointerMove = (moveEvent) => {
+      const nextWidth = clamp(window.innerWidth - moveEvent.clientX, 300, Math.min(720, window.innerWidth - 620));
+      store.previewWidth = nextWidth;
+      document.querySelector(".workspace")?.style.setProperty("grid-template-columns", `310px minmax(360px, 1fr) 8px ${nextWidth}px`);
+    };
+
+    const onPointerUp = () => {
+      localStorage.setItem(PREVIEW_WIDTH_KEY, String(store.previewWidth));
+      document.body.classList.remove("is-resizing-preview");
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+  });
+}
+
+function loadPreviewWidth() {
+  const stored = Number(localStorage.getItem(PREVIEW_WIDTH_KEY));
+  return Number.isFinite(stored) ? clamp(stored, 300, 720) : 390;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function formatStatus(status) {
