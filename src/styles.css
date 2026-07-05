@@ -50,7 +50,7 @@ input:disabled {
 
 .workspace {
   display: grid;
-  grid-template-columns: 310px minmax(360px, 1fr) 8px 390px;
+  grid-template-columns: 310px 8px minmax(360px, 1fr) 8px 390px;
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -96,11 +96,11 @@ input:disabled {
 }
 
 .panel-resizer:hover::after,
-.is-resizing-preview .panel-resizer::after {
+.is-resizing-panel .panel-resizer::after {
   background: rgba(255, 255, 255, 0.26);
 }
 
-.is-resizing-preview {
+.is-resizing-panel {
   cursor: col-resize;
   user-select: none;
 }
@@ -1039,7 +1039,7 @@ input:disabled {
 
 @media (max-width: 1180px) {
   .workspace {
-    grid-template-columns: 260px minmax(360px, 1fr) 8px 330px;
+    grid-template-columns: 260px 8px minmax(360px, 1fr) 8px 330px;
   }
 
   .thread {

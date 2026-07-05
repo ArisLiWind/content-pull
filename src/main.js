@@ -25,6 +25,7 @@ import { contentDatabase, migrateLegacyLocalStorage } from "./database.js";
 const app = document.querySelector("#app");
 const tools = createDefaultToolRouter();
 const publishers = createPublisherRegistry();
+const SIDEBAR_WIDTH_KEY = "content-pull-sidebar-width";
 const PREVIEW_WIDTH_KEY = "content-pull-preview-width";
 
 const store = {
@@ -35,6 +36,7 @@ const store = {
   sidebarMode: "tasks",
   searchQuery: "",
   previewMode: "file",
+  sidebarWidth: loadSidebarWidth(),
   previewWidth: loadPreviewWidth(),
   accountMenuOpen: false,
   accountView: "menu",
@@ -66,10 +68,11 @@ async function bootstrap() {
 function render() {
   const activeTask = getActiveTask();
   app.innerHTML = `
-    <main class="workspace" style="grid-template-columns: 310px minmax(360px, 1fr) 8px ${store.previewWidth}px;">
+    <main class="workspace" style="${workspaceGridStyle()}">
       ${renderSidebar(activeTask)}
+      <div class="panel-resizer sidebar-resizer" data-action="resize-sidebar" title="拖动调整侧栏宽度"></div>
       ${renderMainPanel(activeTask)}
-      <div class="panel-resizer" data-action="resize-preview" title="拖动调整文件栏宽度"></div>
+      <div class="panel-resizer preview-resizer" data-action="resize-preview" title="拖动调整文件栏宽度"></div>
       ${renderPreviewPanel(activeTask)}
     </main>
   `;
@@ -883,7 +886,7 @@ function bindEvents() {
     });
   });
 
-  bindPreviewResizer();
+  bindPanelResizers();
 }
 
 async function testDeepSeekConnection() {
@@ -1072,24 +1075,33 @@ function persistTasks() {
   for (const task of store.tasks.slice(0, 80)) contentDatabase.putTask(task);
 }
 
-function bindPreviewResizer() {
-  const resizer = document.querySelector("[data-action='resize-preview']");
+function bindPanelResizers() {
+  bindPanelResizer("resize-sidebar", "sidebar");
+  bindPanelResizer("resize-preview", "preview");
+}
+
+function bindPanelResizer(action, target) {
+  const resizer = document.querySelector(`[data-action='${action}']`);
   if (!resizer) return;
 
   resizer.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     resizer.setPointerCapture(event.pointerId);
-    document.body.classList.add("is-resizing-preview");
+    document.body.classList.add("is-resizing-panel");
 
     const onPointerMove = (moveEvent) => {
-      const nextWidth = clamp(window.innerWidth - moveEvent.clientX, 300, Math.min(720, window.innerWidth - 620));
-      store.previewWidth = nextWidth;
-      document.querySelector(".workspace")?.style.setProperty("grid-template-columns", `310px minmax(360px, 1fr) 8px ${nextWidth}px`);
+      if (target === "sidebar") {
+        store.sidebarWidth = clamp(moveEvent.clientX, 240, Math.min(460, window.innerWidth - store.previewWidth - 520));
+      } else {
+        store.previewWidth = clamp(window.innerWidth - moveEvent.clientX, 300, Math.min(720, window.innerWidth - store.sidebarWidth - 520));
+      }
+      updateWorkspaceGrid();
     };
 
     const onPointerUp = () => {
+      localStorage.setItem(SIDEBAR_WIDTH_KEY, String(store.sidebarWidth));
       localStorage.setItem(PREVIEW_WIDTH_KEY, String(store.previewWidth));
-      document.body.classList.remove("is-resizing-preview");
+      document.body.classList.remove("is-resizing-panel");
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
     };
@@ -1097,6 +1109,19 @@ function bindPreviewResizer() {
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
   });
+}
+
+function updateWorkspaceGrid() {
+  document.querySelector(".workspace")?.setAttribute("style", workspaceGridStyle());
+}
+
+function workspaceGridStyle() {
+  return `grid-template-columns: ${store.sidebarWidth}px 8px minmax(360px, 1fr) 8px ${store.previewWidth}px;`;
+}
+
+function loadSidebarWidth() {
+  const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+  return Number.isFinite(stored) ? clamp(stored, 240, 460) : 310;
 }
 
 function loadPreviewWidth() {
