@@ -1,7 +1,7 @@
 import { contentDatabase } from "./database.js";
 
 export class AgentMemory {
-  constructor(namespace = "viewpull-memory") {
+  constructor(namespace = "content-pull-memory") {
     this.namespace = namespace;
   }
 

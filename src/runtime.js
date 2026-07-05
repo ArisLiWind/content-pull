@@ -13,9 +13,9 @@ import { ModelClient } from "./llm.js";
 import { OpenClawGateway } from "./openclaw.js";
 
 export const CONTENT_AGENT_DEFINITION = {
-  name: "ViewPull",
+  name: "Content Pull",
   type: "AI Content Agent",
-  description: "ViewPull is an AI Content Agent powered by a native Agent Harness.",
+  description: "Content Pull is an AI Content Agent powered by a native Agent Harness.",
   architecture: [
     "Content Agent",
     "Harness",

@@ -1,7 +1,7 @@
 import { contentDatabase } from "./database.js";
 
 export class VirtualFilesystem {
-  constructor(namespace = "viewpull-files") {
+  constructor(namespace = "content-pull-files") {
     this.namespace = namespace;
   }
 

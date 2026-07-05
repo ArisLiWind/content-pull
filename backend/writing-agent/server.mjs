@@ -17,7 +17,7 @@ const server = createServer(async (request, response) => {
 
 server.listen(config.port, config.host, () => {
   const runtime = assertRuntimeConfig();
-  console.log(`ViewPull Writing Agent listening on http://${config.host}:${config.port}`);
+  console.log(`Content Pull Writing Agent listening on http://${config.host}:${config.port}`);
   if (!runtime.ok) {
     console.log(`Missing environment variables: ${runtime.missing.join(", ")}`);
   }

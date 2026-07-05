@@ -1,7 +1,7 @@
-import { VIEWPULL_BACKEND, publicBackendConfig } from "./config.mjs";
+import { CONTENT_PULL_BACKEND, publicBackendConfig } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
 import { listPublisherConnections, loadLocalConfig, publicLocalConfig, saveDeepSeekApiKey, savePublisherConnection } from "./local-config.mjs";
-import { approveRequest, callLocalAgentTool, getLocalAgentStatus, listApprovals, listAuditLog, listLocalAgentTools, requestApproval } from "./local-agent.mjs";
+import { approveRequest, callLocalAgentTool, getLocalAgentStatus, listApprovals, listAuditLog, listLocalAgentTools, rejectRequest, requestApproval } from "./local-agent.mjs";
 import { callMcpTool, handleMcpJsonRpc, listMcpTools } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
 import { publishToExternalApp } from "./publishers.mjs";
@@ -29,12 +29,12 @@ const server = globalThis.Bun
 await loadLocalConfig();
 
 if (!server) {
-  throw new Error("ViewPull backend currently expects the Node.js runtime.");
+  throw new Error("Content Pull backend currently expects the Node.js runtime.");
 }
 
-server.listen(VIEWPULL_BACKEND.port, VIEWPULL_BACKEND.host, () => {
-  console.log(`ViewPull backend listening on http://${VIEWPULL_BACKEND.host}:${VIEWPULL_BACKEND.port}`);
-  if (!VIEWPULL_BACKEND.deepseek.apiKey) {
+server.listen(CONTENT_PULL_BACKEND.port, CONTENT_PULL_BACKEND.host, () => {
+  console.log(`Content Pull backend listening on http://${CONTENT_PULL_BACKEND.host}:${CONTENT_PULL_BACKEND.port}`);
+  if (!CONTENT_PULL_BACKEND.deepseek.apiKey) {
     console.log("DeepSeek API Key missing. Set DEEPSEEK_API_KEY before starting the backend.");
   }
 });
@@ -51,11 +51,11 @@ async function route(request, response) {
     const openclaw = await checkOpenClawRuntime();
     return sendJson(response, 200, {
       ok: true,
-      service: "viewpull-backend",
+      service: "content-pull-backend",
       config: publicBackendConfig(),
       localConfig: publicLocalConfig(),
       requirements: {
-        needsDeepSeekApiKey: !VIEWPULL_BACKEND.deepseek.apiKey,
+        needsDeepSeekApiKey: !CONTENT_PULL_BACKEND.deepseek.apiKey,
         needsOpenClawCloudDeploy: false
       },
       openclaw
@@ -94,6 +94,11 @@ async function route(request, response) {
 
   if (request.method === "POST" && url.pathname === "/local-agent/approvals/approve") {
     const result = approveRequest((await readJson(request)).id);
+    return sendJson(response, result.ok ? 200 : 404, result);
+  }
+
+  if (request.method === "POST" && url.pathname === "/local-agent/approvals/reject") {
+    const result = rejectRequest((await readJson(request)).id);
     return sendJson(response, result.ok ? 200 : 404, result);
   }
 
@@ -194,7 +199,7 @@ async function route(request, response) {
       id: `chatcmpl-${crypto.randomUUID()}`,
       object: "chat.completion",
       created: Math.floor(Date.now() / 1000),
-      model: body.model || VIEWPULL_BACKEND.openclaw.model,
+      model: body.model || CONTENT_PULL_BACKEND.openclaw.model,
       choices: [
         {
           index: 0,
@@ -224,7 +229,7 @@ async function route(request, response) {
       },
       {
         role: "user",
-        content: "Reply in Chinese with one short sentence confirming DeepSeek is connected to ViewPull."
+        content: "Reply in Chinese with one short sentence confirming DeepSeek is connected to Content Pull."
       }
     ], { apiKey: requestApiKey });
     return sendJson(response, result.ok ? 200 : 400, result);
@@ -265,7 +270,7 @@ async function route(request, response) {
 
     return sendJson(response, result.ok ? 200 : 400, {
       ...result,
-      provider: result.ok ? "viewpull-assistant" : result.provider,
+      provider: result.ok ? "content-pull-assistant" : result.provider,
       openclaw: {
         mode: openclaw.mode,
         source: openclaw.source || "remote",
@@ -293,7 +298,7 @@ async function route(request, response) {
     const deepseek = await callDeepSeek([
       {
         role: "system",
-        content: "You are ViewPull's backend research agent. Give concise, source-aware planning notes."
+        content: "You are Content Pull's backend research agent. Give concise, source-aware planning notes."
       },
       {
         role: "user",
@@ -350,7 +355,7 @@ function shouldUseOpenClawContext(message) {
 
 function buildAssistantSystemPrompt(openclaw, toolContext) {
   return [
-    "你是 ViewPull，一个个人 AI 助手。你要直接和用户对话，而不是默认修改文章。",
+    "你是 Content Pull，一个个人 AI 助手。你要直接和用户对话，而不是默认修改文章。",
     "你的回答应该自然、清楚、可执行。用户没有要求写长文时，不要自动生成文章草稿。",
     "当用户要求研究、搜索、整理资料、生成方案、写代码、改写文本或规划任务时，你可以给出步骤、结论和下一步建议。",
     "如果用户明确要求修改右侧文件或文章，你可以提醒用户使用下方“修改”输入框；但正常聊天必须直接回答。",

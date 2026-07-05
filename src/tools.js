@@ -115,7 +115,7 @@ export function createDefaultToolRouter() {
           title: "1990-2026 人工智能关键浪潮时间线",
           url: "https://example.com/ai-timeline-1990-2026",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "从互联网普及、搜索引擎、移动互联网、深度学习、Transformer、生成式 AI 到 Agent，技术主线从连接信息走向自动完成任务。",
           credibilityScore: 0.84
@@ -125,7 +125,7 @@ export function createDefaultToolRouter() {
           title: "科技爆款文章标题与完读机制分析",
           url: "https://example.com/viral-tech-headlines",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "高数据标题通常同时包含时代判断、强冲突、明确对象和可感知收益，例如“未来十年谁会被重写”。",
           credibilityScore: 0.79
@@ -135,7 +135,7 @@ export function createDefaultToolRouter() {
           title: "当下 AI 浪潮：模型、工具调用与产业落地",
           url: "https://example.com/ai-wave-now",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "2022 之后的生成式 AI 让普通用户第一次直接感知模型能力，2024-2026 的重点转向多模态、Agent、企业流程和内容生产自动化。",
           credibilityScore: 0.82
@@ -145,7 +145,7 @@ export function createDefaultToolRouter() {
           title: "未来 15 年 AI 技术与内容行业影响预测",
           url: "https://example.com/ai-next-15-years",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "未来 15 年的核心变量不是单个模型，而是低成本智能劳动力、软件代理、个人知识系统和可审计的人机协作流程。",
           credibilityScore: 0.77
@@ -157,7 +157,7 @@ export function createDefaultToolRouter() {
           title: "AI Agent 产品化趋势观察",
           url: "https://example.com/agent-productization",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "Agent 产品正在从聊天框转向任务工作台和可审计工作流。",
           credibilityScore: 0.82
@@ -167,7 +167,7 @@ export function createDefaultToolRouter() {
           title: "多工具调用与 MCP 生态",
           url: "https://example.com/mcp-tools",
           platform: "web",
-          author: "ViewPull Research",
+          author: "Content Pull Research",
           publishedAt: new Date().toISOString(),
           summary: "MCP 让 Agent 能用统一协议连接搜索、文件、浏览器、发布等外部系统。",
           credibilityScore: 0.78

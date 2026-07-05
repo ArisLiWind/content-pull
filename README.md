@@ -1,8 +1,8 @@
-# ViewPull
+# Content Pull
 
-ViewPull is a personal AI assistant workspace built from the Content X interaction model and an OpenClaw-compatible backend layer.
+Content Pull is a personal AI assistant workspace built from the Content X interaction model and an OpenClaw-compatible backend layer.
 
-It is designed for people who want one visible assistant to research, plan, draft, revise, remember context, manage files, and prepare work for publishing or handoff. ViewPull keeps the agent lifecycle visible: planning, tool routing, memory, document state, approval gates, and backend status are all part of the product surface.
+It is designed for people who want one visible assistant to research, plan, draft, revise, remember context, manage files, and prepare work for publishing or handoff. Content Pull keeps the agent lifecycle visible: planning, tool routing, memory, document state, approval gates, and backend status are all part of the product surface.
 
 ## Sources
 
@@ -11,7 +11,7 @@ It is designed for people who want one visible assistant to research, plan, draf
 
 The local backend in this repository provides an embedded OpenClaw-compatible runtime with MCP-style tools. It can also point at a separately deployed OpenClaw-compatible service through `OPENCLAW_REMOTE_URL`.
 
-## What ViewPull Does
+## What Content Pull Does
 
 - Runs a Codex-style three-column personal assistant workspace
 - Turns natural-language goals into research, plans, drafts, and revisions
@@ -51,21 +51,21 @@ export DEEPSEEK_API_KEY=your_deepseek_key
 npm run backend:start
 ```
 
-ViewPull uses these internal defaults:
+Content Pull uses these internal defaults:
 
 ```text
 API Base URL: https://api.deepseek.com
 Model: deepseek-chat
 OpenClaw Mode: embedded
 MCP Endpoint: http://127.0.0.1:8788/mcp
-Memory Namespace: viewpull-memory
+Memory Namespace: content-pull-memory
 ```
 
 Do not commit API keys. Keys are stored only in local app settings or local environment variables.
 
 ## OpenClaw Backend
 
-ViewPull ships with an embedded OpenClaw-compatible backend layer at `backend/viewpull`.
+Content Pull ships with an embedded OpenClaw-compatible backend layer at `backend/content-pull`.
 
 Backend routes:
 
@@ -124,4 +124,4 @@ npm run backend:openclaw:check
 
 ## Repository
 
-GitHub: [ArisLiWind/ViewPull](https://github.com/ArisLiWind/ViewPull)
+GitHub: [ArisLiWind/content-pull](https://github.com/ArisLiWind/content-pull)

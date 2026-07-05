@@ -1,9 +1,9 @@
-import { checkOpenClawRuntime } from "../viewpull/openclaw.mjs";
+import { checkOpenClawRuntime } from "../content-pull/openclaw.mjs";
 
 const runtime = await checkOpenClawRuntime();
 const results = [
   {
-    name: "ViewPull OpenClaw Runtime",
+    name: "Content Pull OpenClaw Runtime",
     ok: runtime.ok,
     message: `${runtime.mode} mode`
   },

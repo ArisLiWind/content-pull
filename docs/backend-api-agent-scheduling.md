@@ -1,14 +1,14 @@
-# ViewPull 后端 API 配置与 Agent 调度机制说明文档
+# Content Pull 后端 API 配置与 Agent 调度机制说明文档
 
 > **版本**：v0.1.0  
 > **最后更新**：2026-07-03  
-> **目标读者**：ViewPull 开发者与系统集成者
+> **目标读者**：Content Pull 开发者与系统集成者
 
 ---
 
 ## 1. 系统架构概览
 
-ViewPull 是一个运行在浏览器端（支持 Electron 桌面封装）的 AI Content Agent 系统。其核心定位是 **Agent Harness（代理调度平台）**，而非传统的 Workflow Builder 或 ChatBot。
+Content Pull 是一个运行在浏览器端（支持 Electron 桌面封装）的 AI Content Agent 系统。其核心定位是 **Agent Harness（代理调度平台）**，而非传统的 Workflow Builder 或 ChatBot。
 
 ### 1.1 架构层次
 
@@ -57,7 +57,7 @@ Content Agent
 
 ### 2.1 配置项定义
 
-后端配置通过 `localStorage` 持久化，key 为 `viewpull-backend-config`。前端提供 **设置面板** 供用户编辑。配置项定义位于 `src/backend.js`。
+后端配置通过 `localStorage` 持久化，key 为 `content-pull-backend-config`。前端提供 **设置面板** 供用户编辑。配置项定义位于 `src/backend.js`。
 
 #### 2.1.1 默认配置常量
 
@@ -69,7 +69,7 @@ export const DEFAULT_BACKEND_CONFIG = {
   model:            "deepseek-chat",                  // 模型标识符
   openclawGatewayUrl: "",                             // 可选远端 OpenClaw；默认走内置后端
   openclawApiKey:   "",                               // V1 不暴露到普通用户设置页
-  memoryNamespace:  "viewpull-memory"                // 记忆命名空间
+  memoryNamespace:  "content-pull-memory"                // 记忆命名空间
 };
 ```
 
@@ -81,8 +81,8 @@ export const DEFAULT_BACKEND_CONFIG = {
 | `provider` | `string` | 固定 | `deepseek` | V1 内部固定，不出现在普通用户设置页 |
 | `apiBaseUrl` | `string` | 固定 | `https://api.deepseek.com` | V1 内部固定，不出现在普通用户设置页 |
 | `model` | `string` | 固定 | `deepseek-chat` | V1 内部固定，不出现在普通用户设置页 |
-| `openclawGatewayUrl` | `string` | 可选 | `""` | 可选云端 OpenClaw URL；默认走 ViewPull 内置 OpenClaw-compatible 后端 |
-| `memoryNamespace` | `string` | 固定 | `viewpull-memory` | V1 内部固定，不出现在普通用户设置页 |
+| `openclawGatewayUrl` | `string` | 可选 | `""` | 可选云端 OpenClaw URL；默认走 Content Pull 内置 OpenClaw-compatible 后端 |
+| `memoryNamespace` | `string` | 固定 | `content-pull-memory` | V1 内部固定，不出现在普通用户设置页 |
 
 ### 2.2 DeepSeek 配置
 
@@ -92,7 +92,7 @@ export const DEFAULT_BACKEND_CONFIG = {
 API Key: 用户自己的 DeepSeek API Key
 ```
 
-ViewPull 使用 OpenAI-compatible `/chat/completions` 形式调用模型。API Key 只保存在本地 `localStorage`，不要写入源码、README 或 GitHub Release。
+Content Pull 使用 OpenAI-compatible `/chat/completions` 形式调用模型。API Key 只保存在本地 `localStorage`，不要写入源码、README 或 GitHub Release。
 
 本地后端服务运行时也支持从环境变量读取 DeepSeek Key：
 
@@ -109,19 +109,19 @@ npm run backend:deepseek:test
 
 ### 2.3 OpenClaw 后端配置
 
-OpenClaw 能力默认由 ViewPull 内置后端承接，不依赖用户本机 OpenClaw CLI 或 Gateway。可选云端部署时使用：
+OpenClaw 能力默认由 Content Pull 内置后端承接，不依赖用户本机 OpenClaw CLI 或 Gateway。可选云端部署时使用：
 
 ```bash
 export OPENCLAW_REMOTE_URL=https://your-openclaw-backend.example.com
 npm run backend:start
 ```
 
-ViewPull V1 内部固定配置：
+Content Pull V1 内部固定配置：
 
 ```text
 OpenClaw Mode: embedded
 MCP Endpoint: http://127.0.0.1:8788/mcp
-Memory Namespace: viewpull-memory
+Memory Namespace: content-pull-memory
 ```
 
 官方 OpenClaw 后端：
@@ -131,7 +131,7 @@ Upstream: https://github.com/openclaw/openclaw
 Local backend folder: backend/openclaw
 ```
 
-启动 ViewPull 后端：
+启动 Content Pull 后端：
 
 ```bash
 npm run backend:start
@@ -143,11 +143,11 @@ npm run backend:start
 npm run backend:openclaw:check
 ```
 
-`backend/viewpull/mcp.mjs` 提供内置 MCP-style tools。`src/mcp.js` 的 `McpGateway` 保留前端 Harness 内部工具路由；后端 `/mcp` 提供共享工具入口，覆盖 research、memory、filesystem、publisher.prepare。
+`backend/content-pull/mcp.mjs` 提供内置 MCP-style tools。`src/mcp.js` 的 `McpGateway` 保留前端 Harness 内部工具路由；后端 `/mcp` 提供共享工具入口，覆盖 research、memory、filesystem、publisher.prepare。
 
-### 2.4 ViewPull 本地后端服务
+### 2.4 Content Pull 本地后端服务
 
-`backend/viewpull/server.mjs` 提供 V1 后端服务：
+`backend/content-pull/server.mjs` 提供 V1 后端服务：
 
 ```text
 GET  /health          检查 DeepSeek Key、内置 OpenClaw-compatible Runtime、MCP、Memory
@@ -166,7 +166,7 @@ http://127.0.0.1:8788
 OpenClaw 后端层目标能力：
 
 - Browser/CDP/Playwright：打开网页、点击 DOM、填表、读取页面、截图
-- Tool Layer：web search、browser、GitHub、filesystem 等能力由官方 OpenClaw 后端承接；ViewPull 内部保留 MCP-style 工具路由抽象
+- Tool Layer：web search、browser、GitHub、filesystem 等能力由官方 OpenClaw 后端承接；Content Pull 内部保留 MCP-style 工具路由抽象
 - Skill System：`skill/SKILL.md` + `handler.ts`
 
 ### 2.5 配置持久化流程
@@ -175,7 +175,7 @@ OpenClaw 后端层目标能力：
 用户填写设置表单
   → saveBackendConfig(config)
     → 字段校验与裁剪（trim / 默认值回填）
-    → localStorage.setItem("viewpull-backend-config", JSON)
+    → localStorage.setItem("content-pull-backend-config", JSON)
     → 更新 store.backendConfig（内存状态）
     → WorkflowHarness 启动时注入 backendConfig 到 Runtime
       → McpGateway 接收 backendConfig（记录 apiBaseUrl / mcpEndpoint / model / hasApiKey）
@@ -186,21 +186,21 @@ OpenClaw 后端层目标能力：
 
 ```text
 loadBackendConfig()
-  → localStorage.getItem("viewpull-backend-config")
+  → localStorage.getItem("content-pull-backend-config")
     → JSON.parse + 与 DEFAULT_BACKEND_CONFIG 合并（缺失字段自动回填）
     → 返回完整配置对象
 ```
 
 ### 2.7 账号配置
 
-账号状态独立于后端 API 配置，通过 `viewpull-account-session` key 存储。
+账号状态独立于后端 API 配置，通过 `content-pull-account-session` key 存储。
 
 ```js
 export const DEFAULT_ACCOUNT_SESSION = {
   loggedIn: true,
   email: "azalearedn@gmail.com",
   name: "创作者",
-  plan: "ViewPull Pro"
+  plan: "Content Pull Pro"
 };
 ```
 
@@ -213,10 +213,10 @@ export const DEFAULT_ACCOUNT_SESSION = {
 
 ### 2.8 前端本地数据库
 
-`src/database.js` 是 ViewPull V1 的前端本地数据库层：
+`src/database.js` 是 Content Pull V1 的前端本地数据库层：
 
 ```text
-Database: viewpull-db
+Database: content-pull-db
 Stores:
   kv      账号、后端设置等键值配置
   tasks   对话任务、状态、草稿、发布状态
@@ -228,7 +228,7 @@ Stores:
 
 - 优先使用 IndexedDB，保证比 localStorage 更适合保存长期任务和文档数据
 - 如果浏览器环境不支持 IndexedDB，则自动回退 localStorage
-- 启动时会迁移旧的 `viewpull-tasks`、`viewpull-files`、`viewpull-memory`
+- 启动时会迁移旧的 `content-pull-tasks`、`content-pull-files`、`content-pull-memory`
 - 用户保存 DeepSeek Key、创建/继续对话、Agent 写入文件和 Memory 时，都会进入统一数据库层
 
 ---
@@ -237,7 +237,7 @@ Stores:
 
 ### 3.1 调度总览
 
-ViewPull 的 Agent 调度采用 **"图驱动 + 回路循环"** 的混合模型：
+Content Pull 的 Agent 调度采用 **"图驱动 + 回路循环"** 的混合模型：
 
 - **StateGraph** 负责定义节点拓扑和执行顺序
 - **Harness** 负责生命周期控制和回路逻辑（研究回路、审稿回路、发布回路）
@@ -516,7 +516,7 @@ logs:              日志列表 [{id, timestamp, level, node, message}]
 
 ### 6.3 状态修改机制
 
-ViewPull 采用 **不可变补丁模式**（immutable patch），通过 `applyStatePatch(state, patch)` 产生新状态对象，所有嵌套对象被浅合并：
+Content Pull 采用 **不可变补丁模式**（immutable patch），通过 `applyStatePatch(state, patch)` 产生新状态对象，所有嵌套对象被浅合并：
 
 ```js
 applyStatePatch(state, { score: 92 }) 
@@ -599,7 +599,7 @@ npm run check
 
 ### 8.4 运行模式
 
-ViewPull 支持两种运行模式：
+Content Pull 支持两种运行模式：
 
 | 模式 | 特点 |
 |------|------|

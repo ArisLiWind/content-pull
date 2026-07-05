@@ -37,7 +37,7 @@ export class MarkdownPublisher {
 
   async prepare(content, metadata) {
     return {
-      filename: slugify(metadata.title || "viewpull-draft") + ".md",
+      filename: slugify(metadata.title || "content-pull-draft") + ".md",
       markdown: content.markdown
     };
   }
@@ -62,7 +62,7 @@ export class HtmlPublisher {
 
   async prepare(content, metadata) {
     return {
-      filename: slugify(metadata.title || "viewpull-draft") + ".html",
+      filename: slugify(metadata.title || "content-pull-draft") + ".html",
       html: content.html
     };
   }
@@ -89,7 +89,7 @@ export class DraftPublisher {
 
   async prepare(content, metadata) {
     return {
-      title: metadata.title || "ViewPull Draft",
+      title: metadata.title || "Content Pull Draft",
       markdown: content.markdown,
       metadata,
       preparedAt: new Date().toISOString()
@@ -126,7 +126,7 @@ export class DraftPublisher {
         status: "failed",
         content: prepared,
         url: "",
-        error: `ViewPull backend publisher is unavailable: ${error.message}`
+        error: `Content Pull backend publisher is unavailable: ${error.message}`
       };
     }
   }
@@ -148,5 +148,5 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "viewpull-draft";
+    .slice(0, 80) || "content-pull-draft";
 }

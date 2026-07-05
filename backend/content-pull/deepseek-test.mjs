@@ -1,4 +1,4 @@
-import { VIEWPULL_BACKEND, assertDeepSeekApiKey } from "./config.mjs";
+import { CONTENT_PULL_BACKEND, assertDeepSeekApiKey } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
 
 const apiKeyCheck = assertDeepSeekApiKey();
@@ -17,7 +17,7 @@ const result = await callDeepSeek([
   },
   {
     role: "user",
-    content: "Reply in Chinese with one short sentence confirming DeepSeek is connected to ViewPull."
+    content: "Reply in Chinese with one short sentence confirming DeepSeek is connected to Content Pull."
   }
 ]);
 
@@ -26,7 +26,7 @@ if (!result.ok) {
   process.exit(1);
 }
 
-console.log(`OK DeepSeek responded with ${VIEWPULL_BACKEND.deepseek.model}.`);
+console.log(`OK DeepSeek responded with ${CONTENT_PULL_BACKEND.deepseek.model}.`);
 console.log(maskText(result.text));
 
 function maskText(value) {

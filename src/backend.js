@@ -1,5 +1,5 @@
-const ACCOUNT_KEY = "viewpull-account-session";
-const BACKEND_KEY = "viewpull-backend-config";
+const ACCOUNT_KEY = "content-pull-account-session";
+const BACKEND_KEY = "content-pull-backend-config";
 
 import { contentDatabase } from "./database.js";
 
@@ -7,7 +7,7 @@ export const DEFAULT_ACCOUNT_SESSION = {
   loggedIn: true,
   email: "azalearedn@gmail.com",
   name: "创作者",
-  plan: "ViewPull Pro"
+  plan: "Content Pull Pro"
 };
 
 export const DEFAULT_BACKEND_CONFIG = {
@@ -17,7 +17,7 @@ export const DEFAULT_BACKEND_CONFIG = {
   model: "deepseek-chat",
   openclawGatewayUrl: "",
   openclawApiKey: "",
-  memoryNamespace: "viewpull-memory"
+  memoryNamespace: "content-pull-memory"
 };
 
 export function loadAccountSession() {
@@ -77,6 +77,56 @@ export async function syncDeepSeekApiKeyToBackend(apiKey) {
     });
     const payload = await response.json();
     return response.ok ? payload : { ok: false, error: payload.error || `Backend config failed: ${response.status}` };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
+export async function loadLocalAgentPanelData() {
+  const [status, approvals, audit] = await Promise.all([
+    backendJson("/local-agent/status"),
+    backendJson("/local-agent/approvals"),
+    backendJson("/local-agent/audit")
+  ]);
+
+  return {
+    status: status.ok === false ? null : status,
+    approvals: approvals.approvals || [],
+    audit: audit.events || [],
+    error: status.ok === false ? status.error : ""
+  };
+}
+
+export async function approveLocalAgentRequest(id) {
+  return backendJson("/local-agent/approvals/approve", {
+    method: "POST",
+    body: { id }
+  });
+}
+
+export async function rejectLocalAgentRequest(id) {
+  return backendJson("/local-agent/approvals/reject", {
+    method: "POST",
+    body: { id }
+  });
+}
+
+export async function callLocalAgentTool(tool, input = {}, approvalId = "") {
+  return backendJson("/local-agent/tools/call", {
+    method: "POST",
+    body: { tool, input, approvalId }
+  });
+}
+
+async function backendJson(path, options = {}) {
+  try {
+    const response = await fetch(`http://127.0.0.1:8788${path}`, {
+      method: options.method || "GET",
+      headers: { "Content-Type": "application/json" },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {})
+    });
+    const payload = await response.json();
+    return response.ok ? payload : { ok: false, error: payload.error || `Backend request failed: ${response.status}` };
   } catch (error) {
     return { ok: false, error: error.message };
   }

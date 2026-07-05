@@ -208,7 +208,7 @@ export class WorkflowHarness {
   async rewriteDraft(state, instruction) {
     if (this.context.model.configured && state.draft.markdown) {
       const result = await this.context.model.chat({
-        system: "你是 ViewPull 的内容编辑 Agent。只输出完整 Markdown 正文，不要解释过程。根据用户新要求改写现有文章，保留事实边界、标题结构和可发布性。",
+        system: "你是 Content Pull 的内容编辑 Agent。只输出完整 Markdown 正文，不要解释过程。根据用户新要求改写现有文章，保留事实边界、标题结构和可发布性。",
         messages: [
           {
             role: "user",
@@ -257,7 +257,7 @@ export class WorkflowHarness {
 
     const result = await this.context.model.chat({
       system: [
-        "你是 ViewPull 的个人 AI 助手。正常对话时直接回答用户，不要默认修改文章。回答使用中文，简洁但有帮助。",
+        "你是 Content Pull 的个人 AI 助手。正常对话时直接回答用户，不要默认修改文章。回答使用中文，简洁但有帮助。",
         state.draft.markdown
           ? "当前右侧文档会作为上下文提供。用户要求修改、整理、续写、扩写、缩短或转格式时，请基于当前右侧文档回答。"
           : ""
@@ -277,7 +277,7 @@ export class WorkflowHarness {
     }
 
     const result = await this.context.model.chat({
-      system: "你是 ViewPull 的文档编辑器。基于当前右侧 Markdown 文档和用户最新要求，输出更新后的完整 Markdown。只输出 Markdown 正文，不要解释过程。",
+      system: "你是 Content Pull 的文档编辑器。基于当前右侧 Markdown 文档和用户最新要求，输出更新后的完整 Markdown。只输出 Markdown 正文，不要解释过程。",
       messages: [
         {
           role: "user",
@@ -384,5 +384,5 @@ function normalizeDocumentMarkdown(value) {
   const markdown = String(value || "").trim();
   if (!markdown) return "";
   if (/^#{1,6}\s/m.test(markdown)) return markdown;
-  return `# ViewPull 回复\n\n${markdown}`;
+  return `# Content Pull 回复\n\n${markdown}`;
 }

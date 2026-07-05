@@ -1,13 +1,13 @@
-import { VIEWPULL_BACKEND } from "./config.mjs";
+import { CONTENT_PULL_BACKEND } from "./config.mjs";
 import { getLocalAgentStatus } from "./local-agent.mjs";
 import { callMcpTool, checkMcpRuntime } from "./mcp.mjs";
 
 export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
-  if (!VIEWPULL_BACKEND.openclaw.remoteUrl) {
+  if (!CONTENT_PULL_BACKEND.openclaw.remoteUrl) {
     return {
       ok: true,
       mode: "embedded",
-      source: "viewpull-backend",
+      source: "content-pull-backend",
       mcp: checkMcpRuntime(),
       localAgent: getLocalAgentStatus(),
       remote: {
@@ -17,7 +17,7 @@ export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
     };
   }
 
-  const remoteUrl = normalizeUrl(VIEWPULL_BACKEND.openclaw.remoteUrl);
+  const remoteUrl = normalizeUrl(CONTENT_PULL_BACKEND.openclaw.remoteUrl);
   const gateway = await fetchWithTimeout(remoteUrl, { method: "GET" }, timeoutMs);
   const chat = await fetchWithTimeout(
     `${remoteUrl}/v1/chat/completions`,
@@ -25,8 +25,8 @@ export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: VIEWPULL_BACKEND.openclaw.model,
-        messages: [{ role: "user", content: "ViewPull health check. Reply OK." }],
+        model: CONTENT_PULL_BACKEND.openclaw.model,
+        messages: [{ role: "user", content: "Content Pull health check. Reply OK." }],
         stream: false
       })
     },
@@ -43,7 +43,7 @@ export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
 }
 
 export async function askOpenClaw(message, { timeoutMs = 30000 } = {}) {
-  if (!VIEWPULL_BACKEND.openclaw.remoteUrl) {
+  if (!CONTENT_PULL_BACKEND.openclaw.remoteUrl) {
     const response = await callMcpTool("content.research", { query: message });
     return {
       ok: response.ok,
@@ -53,18 +53,18 @@ export async function askOpenClaw(message, { timeoutMs = 30000 } = {}) {
     };
   }
 
-  const gatewayUrl = normalizeUrl(VIEWPULL_BACKEND.openclaw.remoteUrl);
+  const gatewayUrl = normalizeUrl(CONTENT_PULL_BACKEND.openclaw.remoteUrl);
   const response = await fetchWithTimeout(
     `${gatewayUrl}/v1/chat/completions`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: VIEWPULL_BACKEND.openclaw.model,
+        model: CONTENT_PULL_BACKEND.openclaw.model,
         messages: [
           {
             role: "system",
-            content: "You are ViewPull's OpenClaw-powered backend research agent."
+            content: "You are Content Pull's OpenClaw-powered backend research agent."
           },
           {
             role: "user",

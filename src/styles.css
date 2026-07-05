@@ -882,6 +882,78 @@ input:disabled {
   font-size: 13px;
 }
 
+.local-agent-panel {
+  max-height: min(680px, calc(100vh - 120px));
+  overflow-y: auto;
+}
+
+.agent-section {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.agent-section > strong {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.agent-actions,
+.approval-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.approval-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: #1d1d1d;
+}
+
+.approval-card span {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.approval-card p,
+.audit-line {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.approval-card code {
+  display: block;
+  max-width: 100%;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 6px;
+  background: #121212;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.approval-actions button {
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: var(--green);
+  color: #06140b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.approval-actions button:last-child {
+  background: #342020;
+  color: #ffb0b0;
+}
+
 @media (max-width: 1180px) {
   .workspace {
     grid-template-columns: 260px minmax(360px, 1fr) 330px;

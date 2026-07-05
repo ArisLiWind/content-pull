@@ -1,5 +1,5 @@
 export class MemoryCheckpointer {
-  constructor({ namespace = "viewpull-memory" } = {}) {
+  constructor({ namespace = "content-pull-memory" } = {}) {
     this.namespace = namespace;
     this.snapshots = new Map();
   }

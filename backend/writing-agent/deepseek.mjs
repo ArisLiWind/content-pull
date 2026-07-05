@@ -5,7 +5,7 @@ export async function generateArticle(input) {
     {
       role: "system",
       content: [
-        "你是 ViewPull 的 AI 写作 Agent。",
+        "你是 Content Pull 的 AI 写作 Agent。",
         "你的任务是把用户输入变成一篇可继续修改的中文文章。",
         "只输出 Markdown 正文，不要解释过程。"
       ].join("\n")
@@ -29,7 +29,7 @@ export async function reviseArticle({ currentDraft, instruction, conversation })
     {
       role: "system",
       content: [
-        "你是 ViewPull 的 AI 写作 Agent。",
+        "你是 Content Pull 的 AI 写作 Agent。",
         "用户会持续要求修改同一篇文章。",
         "你必须基于原文章和上下文修改，不要新建任务。",
         "只输出修改后的完整 Markdown 正文，不要解释过程。"

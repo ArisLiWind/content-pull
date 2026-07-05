@@ -1,6 +1,6 @@
 export const config = {
-  host: process.env.VIEWPULL_HOST || "0.0.0.0",
-  port: Number(process.env.VIEWPULL_PORT || 8788),
+  host: process.env.CONTENT_PULL_HOST || "0.0.0.0",
+  port: Number(process.env.CONTENT_PULL_PORT || 8788),
   deepseek: {
     apiBaseUrl: process.env.DEEPSEEK_API_BASE_URL || "https://api.deepseek.com",
     apiKey: process.env.DEEPSEEK_API_KEY || "",

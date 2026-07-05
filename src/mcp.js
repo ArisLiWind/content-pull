@@ -42,14 +42,14 @@ export class McpGateway {
     }
 
     const prompt = [
-      "You are the ViewPull research tool.",
+      "You are the Content Pull research tool.",
       "Use OpenClaw's local gateway capabilities when available.",
       "Return concise, source-aware research notes suitable for drafting a Chinese article.",
       `Task stage: ${context.stage || "research"}`,
       `Query: ${input.query || ""}`
     ].join("\n");
 
-    const response = await this.openclaw.chat(prompt, { sessionId: context.taskId || "viewpull-research" });
+    const response = await this.openclaw.chat(prompt, { sessionId: context.taskId || "content-pull-research" });
     if (!response.ok) return response;
 
     const summary = String(response.text || "").trim();

@@ -5,11 +5,15 @@ import { createPublisherRegistry } from "./publishers.js";
 import { exportBlob, renderMarkdown } from "./markdown.js";
 import { ModelClient } from "./llm.js";
 import {
+  approveLocalAgentRequest,
+  callLocalAgentTool,
   clearAccountSession,
+  loadLocalAgentPanelData,
   loadAccountSession,
   loadAccountSessionFromDatabase,
   loadBackendConfig,
   loadBackendConfigFromDatabase,
+  rejectLocalAgentRequest,
   saveAccountSession,
   saveBackendConfig,
   syncDeepSeekApiKeyToBackend
@@ -33,6 +37,7 @@ const store = {
   account: loadAccountSession(),
   backendConfig: loadBackendConfig(),
   backendStatus: createBackendStatus(),
+  localAgent: createLocalAgentPanelState(),
   accountNotice: "",
   hasUpdate: false
 };
@@ -81,7 +86,7 @@ function renderSidebar(activeTask) {
 
       ${store.sidebarMode === "search" ? renderSearchBox() : ""}
 
-      <div class="section-label">ViewPull</div>
+      <div class="section-label">Content Pull</div>
       <div class="task-list">
         ${visibleTasks
           .map(
@@ -99,7 +104,7 @@ function renderSidebar(activeTask) {
       </div>
       <div class="account-wrap">
         <button class="account-row" data-action="toggle-account-menu" type="button">
-        <div class="avatar">VP</div>
+        <div class="avatar">CP</div>
         <div>
           <strong>${escapeHtml(store.account.loggedIn ? store.account.name : "未登录")}</strong>
           <span>${escapeHtml(store.account.loggedIn ? store.account.plan : "点击登录")}</span>
@@ -117,7 +122,7 @@ function renderAccountMenu() {
     return `
       <div class="account-menu">
         <div class="account-menu-head">
-          <span>ViewPull</span>
+          <span>Content Pull</span>
           <strong>登录账号</strong>
         </div>
         <form class="account-form" data-action="account-login">
@@ -138,6 +143,7 @@ function renderAccountMenu() {
 
   if (store.accountView === "settings") return renderSettingsPanel();
   if (store.accountView === "backend") return renderBackendStatusPanel();
+  if (store.accountView === "local-agent") return renderLocalAgentPanel();
   if (store.accountView === "profile") return renderSimpleAccountPanel("个人资料", "创作者账号已连接本地 Content Agent。");
   if (store.accountView === "invite") return renderSimpleAccountPanel("邀请好友", "邀请链接会在接入正式后端后生成。");
   if (store.accountView === "quota") return renderSimpleAccountPanel("剩余用量", "本地预览：30 / 100 次 Agent Run。");
@@ -152,6 +158,7 @@ function renderAccountMenu() {
         <button data-account-view="profile" type="button">个人资料</button>
         <button data-account-view="settings" type="button">设置</button>
         <button data-account-view="backend" type="button">后端状态</button>
+        <button data-account-view="local-agent" type="button">本地 Agent</button>
         <button data-account-view="invite" type="button">邀请好友</button>
         <button data-account-view="quota" type="button">剩余用量</button>
         <button data-action="account-logout" type="button">退出登录</button>
@@ -210,7 +217,66 @@ function renderBackendStatusPanel() {
           )
           .join("")}
       </div>
-      <p class="account-panel-copy">OpenClaw、MCP、Memory 属于 ViewPull 内置后端能力。需要云端部署时，只配置 OPENCLAW_REMOTE_URL，不依赖本机 CLI/Gateway。</p>
+      <p class="account-panel-copy">OpenClaw、MCP、Memory 属于 Content Pull 内置后端能力。需要云端部署时，只配置 OPENCLAW_REMOTE_URL，不依赖本机 CLI/Gateway。</p>
+    </div>
+  `;
+}
+
+function renderLocalAgentPanel() {
+  const pendingApprovals = store.localAgent.approvals.filter((approval) => approval.status === "pending");
+  const permissions = store.localAgent.status?.permissions || [];
+  const audit = store.localAgent.audit.slice(-5).reverse();
+
+  return `
+    <div class="account-menu account-menu-large local-agent-panel">
+      <div class="account-panel-head">
+        <button class="account-back" data-action="account-back" type="button">‹</button>
+        <strong>本地 Agent</strong>
+      </div>
+      <div class="agent-actions">
+        <button class="account-secondary" data-action="refresh-local-agent" type="button">刷新状态</button>
+        <button class="account-secondary" data-action="test-chrome-cdp" type="button">测试 Chrome CDP</button>
+      </div>
+
+      <div class="backend-status-list">
+        ${permissions
+          .map(
+            (permission) => `
+              <div class="backend-status-row">
+                <span>${escapeHtml(permission.name)}</span>
+                <strong>${escapeHtml(permission.status)}</strong>
+              </div>
+            `
+          )
+          .join("") || `<div class="empty">等待读取本地 Agent 状态</div>`}
+      </div>
+
+      <div class="agent-section">
+        <strong>待审批</strong>
+        ${pendingApprovals
+          .map(
+            (approval) => `
+              <div class="approval-card">
+                <span>${escapeHtml(approval.tool)}</span>
+                <p>${escapeHtml(approval.reason)}</p>
+                <code>${escapeHtml(JSON.stringify(approval.input || {}))}</code>
+                <div class="approval-actions">
+                  <button data-action="approve-local-agent" data-approval-id="${escapeHtml(approval.id)}" type="button">批准</button>
+                  <button data-action="reject-local-agent" data-approval-id="${escapeHtml(approval.id)}" type="button">拒绝</button>
+                </div>
+              </div>
+            `
+          )
+          .join("") || `<p class="account-panel-copy">没有待审批请求。</p>`}
+      </div>
+
+      <div class="agent-section">
+        <strong>最近审计</strong>
+        ${audit
+          .map((event) => `<p class="audit-line">${escapeHtml(event.type)} · ${formatTime(event.createdAt)}</p>`)
+          .join("") || `<p class="account-panel-copy">暂无审计事件。</p>`}
+      </div>
+      ${store.accountNotice ? `<p class="account-notice">${escapeHtml(store.accountNotice)}</p>` : ""}
     </div>
   `;
 }
@@ -231,9 +297,17 @@ function createBackendStatus() {
   return {
     openclawMode: "内置 Harness",
     mcp: "已启用 /mcp",
-    memory: "viewpull-memory",
+    memory: "content-pull-memory",
     filesystem: "已启用",
     publisher: "人工确认后发布"
+  };
+}
+
+function createLocalAgentPanelState() {
+  return {
+    status: null,
+    approvals: [],
+    audit: []
   };
 }
 
@@ -249,13 +323,13 @@ function renderSearchBox() {
 function renderMainPanel(task) {
   const defaultPrompt = "帮我研究今天最重要的 AI 技术进展，整理成可执行的个人简报和发布草稿。";
   const composerValue = task ? "" : defaultPrompt;
-  const composerPlaceholder = task ? "继续输入，让 ViewPull 接着处理" : "告诉 ViewPull 你想完成什么";
+  const composerPlaceholder = task ? "继续输入，让 Content Pull 接着处理" : "告诉 Content Pull 你想完成什么";
 
   return `
     <section class="main-panel">
       <div class="thread">
         <div class="empty-state">
-          <h2>你想让 <span>ViewPull</span> 帮你完成什么？</h2>
+          <h2>你想让 <span>Content Pull</span> 帮你完成什么？</h2>
         </div>
         ${task ? renderConversation(task) : ""}
       </div>
@@ -264,7 +338,7 @@ function renderMainPanel(task) {
         <form class="goal-form composer" data-action="run-task">
           <textarea name="goal" rows="3" placeholder="${composerPlaceholder}">${escapeHtml(displayText(composerValue))}</textarea>
           <div class="composer-actions">
-            <span class="composer-meta">${task ? "继续当前对话并更新右侧文件" : "ViewPull / local"}</span>
+            <span class="composer-meta">${task ? "继续当前对话并更新右侧文件" : "Content Pull / local"}</span>
             <button ${store.isRunning ? "disabled" : ""} type="submit">↑</button>
           </div>
         </form>
@@ -427,7 +501,7 @@ function renderProgress(task) {
 function renderWaitingState(task) {
   return `
     <article class="message assistant-message">
-      <p>${store.isRunning ? "ViewPull 正在回复..." : `会话状态：${formatStatus(task.status)}。`}</p>
+      <p>${store.isRunning ? "Content Pull 正在回复..." : `会话状态：${formatStatus(task.status)}。`}</p>
     </article>
   `;
 }
@@ -449,6 +523,7 @@ function bindEvents() {
       store.accountView = button.dataset.accountView;
       store.accountNotice = "";
       render();
+      if (button.dataset.accountView === "local-agent") refreshLocalAgentPanel();
       return;
     }
 
@@ -470,6 +545,22 @@ function bindEvents() {
     if (button.dataset.action === "test-deepseek") {
       testDeepSeekConnection();
     }
+
+    if (button.dataset.action === "refresh-local-agent") {
+      refreshLocalAgentPanel();
+    }
+
+    if (button.dataset.action === "approve-local-agent") {
+      approveLocalAgent(button.dataset.approvalId);
+    }
+
+    if (button.dataset.action === "reject-local-agent") {
+      rejectLocalAgent(button.dataset.approvalId);
+    }
+
+    if (button.dataset.action === "test-chrome-cdp") {
+      testChromeCdp();
+    }
   };
 
   document.querySelector("[data-action='account-login']")?.addEventListener("submit", (event) => {
@@ -485,7 +576,7 @@ function bindEvents() {
       loggedIn: true,
       email,
       name: "创作者",
-      plan: "ViewPull Pro"
+      plan: "Content Pull Pro"
     });
     store.accountView = "menu";
     store.accountNotice = "已登录。";
@@ -671,7 +762,7 @@ function bindEvents() {
   document.querySelector("[data-action='export-md']")?.addEventListener("click", () => {
     const task = getActiveTask();
     const markdown = getCurrentMarkdown();
-    if (task && markdown) exportBlob(`${safeFileName(task.outline.title || "viewpull-draft")}.md`, markdown, "text/markdown");
+    if (task && markdown) exportBlob(`${safeFileName(task.outline.title || "content-pull-draft")}.md`, markdown, "text/markdown");
   });
 
   document.querySelector("[data-action='export-html']")?.addEventListener("click", () => {
@@ -679,7 +770,7 @@ function bindEvents() {
     const markdown = getCurrentMarkdown();
     if (task && markdown) {
       const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(task.outline.title)}</title></head><body>${renderMarkdown(markdown)}</body></html>`;
-      exportBlob(`${safeFileName(task.outline.title || "viewpull-draft")}.html`, html, "text/html");
+      exportBlob(`${safeFileName(task.outline.title || "content-pull-draft")}.html`, html, "text/html");
     }
   });
 
@@ -705,11 +796,11 @@ async function testDeepSeekConnection() {
 
   const model = new ModelClient(store.backendConfig);
   const result = await model.chat({
-    system: "你是 ViewPull 的连接测试助手。",
+    system: "你是 Content Pull 的连接测试助手。",
     messages: [
       {
         role: "user",
-        content: "用一句中文确认 DeepSeek 已经接入 ViewPull。"
+        content: "用一句中文确认 DeepSeek 已经接入 Content Pull。"
       }
     ],
     temperature: 0.2
@@ -719,6 +810,55 @@ async function testDeepSeekConnection() {
     ? `DeepSeek 已生效：${result.text.slice(0, 80)}`
     : `DeepSeek 测试失败：${result.error}`;
   render();
+}
+
+async function refreshLocalAgentPanel() {
+  store.accountNotice = "正在读取本地 Agent 状态...";
+  render();
+
+  const data = await loadLocalAgentPanelData();
+  if (data.error) {
+    store.accountNotice = `读取本地 Agent 失败：${data.error}`;
+  } else {
+    store.localAgent = {
+      status: data.status,
+      approvals: data.approvals,
+      audit: data.audit
+    };
+    store.accountNotice = "本地 Agent 状态已更新。";
+  }
+  render();
+}
+
+async function approveLocalAgent(approvalId) {
+  if (!approvalId) return;
+  store.accountNotice = "正在批准本地 Agent 请求...";
+  render();
+
+  const result = await approveLocalAgentRequest(approvalId);
+  store.accountNotice = result.ok ? "已批准请求。请重新执行对应操作。" : `批准失败：${result.error}`;
+  await refreshLocalAgentPanel();
+}
+
+async function rejectLocalAgent(approvalId) {
+  if (!approvalId) return;
+  store.accountNotice = "正在拒绝本地 Agent 请求...";
+  render();
+
+  const result = await rejectLocalAgentRequest(approvalId);
+  store.accountNotice = result.ok ? "已拒绝请求。" : `拒绝失败：${result.error}`;
+  await refreshLocalAgentPanel();
+}
+
+async function testChromeCdp() {
+  store.accountNotice = "正在测试 Chrome CDP...";
+  render();
+
+  const result = await callLocalAgentTool("local.chrome.status");
+  store.accountNotice = result.ok
+    ? `Chrome CDP 已连接：${result.tabCount || 0} 个标签页。`
+    : `Chrome CDP 未连接：${result.error}`;
+  await refreshLocalAgentPanel();
 }
 
 function getCurrentMarkdown() {
@@ -773,14 +913,14 @@ async function loadTasksFromDatabase() {
 
 function loadTasks() {
   try {
-    return JSON.parse(localStorage.getItem("viewpull-tasks") || "[]");
+    return JSON.parse(localStorage.getItem("content-pull-tasks") || "[]");
   } catch {
     return [];
   }
 }
 
 function persistTasks() {
-  localStorage.setItem("viewpull-tasks", JSON.stringify(store.tasks.slice(0, 20)));
+  localStorage.setItem("content-pull-tasks", JSON.stringify(store.tasks.slice(0, 20)));
   for (const task of store.tasks.slice(0, 80)) contentDatabase.putTask(task);
 }
 
@@ -818,7 +958,7 @@ function formatTime(value) {
 }
 
 function safeFileName(value) {
-  return value.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "") || "viewpull-draft";
+  return value.replace(/[^\w\u4e00-\u9fa5-]+/g, "-").replace(/^-+|-+$/g, "") || "content-pull-draft";
 }
 
 function displayText(value) {

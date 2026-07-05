@@ -27,7 +27,7 @@ export class OpenClawGateway {
     }
   }
 
-  async chat(message, { sessionId = "viewpull-research" } = {}) {
+  async chat(message, { sessionId = "content-pull-research" } = {}) {
     if (!this.enabled) {
       return { ok: false, error: "OpenClaw Gateway is not configured." };
     }
@@ -38,7 +38,7 @@ export class OpenClawGateway {
         messages: [
           {
             role: "system",
-            content: "You are ViewPull's backend research agent. Return concise, source-aware notes for content drafting."
+            content: "You are Content Pull's backend research agent. Return concise, source-aware notes for content drafting."
           },
           {
             role: "user",

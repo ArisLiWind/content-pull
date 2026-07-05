@@ -1,4 +1,4 @@
-import { VIEWPULL_BACKEND } from "./config.mjs";
+import { CONTENT_PULL_BACKEND } from "./config.mjs";
 import { callLocalAgentTool, listLocalAgentTools } from "./local-agent.mjs";
 import { publishToExternalApp } from "./publishers.mjs";
 
@@ -8,7 +8,7 @@ const fileStore = new Map();
 const tools = [
   {
     name: "content.research",
-    description: "Create source-aware research notes for a ViewPull drafting task.",
+    description: "Create source-aware research notes for a Content Pull drafting task.",
     inputSchema: {
       type: "object",
       properties: {
@@ -19,7 +19,7 @@ const tools = [
   },
   {
     name: "memory.read",
-    description: "Read ViewPull agent memory by namespace and key.",
+    description: "Read Content Pull agent memory by namespace and key.",
     inputSchema: {
       type: "object",
       properties: {
@@ -29,7 +29,7 @@ const tools = [
   },
   {
     name: "memory.write",
-    description: "Write ViewPull agent memory.",
+    description: "Write Content Pull agent memory.",
     inputSchema: {
       type: "object",
       properties: {
@@ -41,7 +41,7 @@ const tools = [
   },
   {
     name: "filesystem.write",
-    description: "Write a generated document into the ViewPull backend file layer.",
+    description: "Write a generated document into the Content Pull backend file layer.",
     inputSchema: {
       type: "object",
       properties: {
@@ -82,8 +82,8 @@ const tools = [
 export function checkMcpRuntime() {
   return {
     ok: true,
-    endpoint: VIEWPULL_BACKEND.openclaw.mcpEndpoint,
-    memoryNamespace: VIEWPULL_BACKEND.memory.namespace,
+    endpoint: CONTENT_PULL_BACKEND.openclaw.mcpEndpoint,
+    memoryNamespace: CONTENT_PULL_BACKEND.memory.namespace,
     tools: tools.map((tool) => tool.name),
     capabilities: ["planning", "tool-calling", "memory", "filesystem", "document", "publisher"]
   };
@@ -122,7 +122,7 @@ export async function callMcpTool(name, args = {}) {
           type: "text",
           text: [
             `Research query: ${query}`,
-            "ViewPull embedded OpenClaw-compatible backend prepared a research task.",
+            "Content Pull embedded OpenClaw-compatible backend prepared a research task.",
             "Use DeepSeek for language reasoning, MCP tools for memory/files/document/publisher orchestration, and human approval before publish."
           ].join("\n")
         }
@@ -157,7 +157,7 @@ export async function callMcpTool(name, args = {}) {
         {
           type: "json",
           json: {
-            title: args.title || "ViewPull Draft",
+            title: args.title || "Content Pull Draft",
             format: args.format || "article",
             requiresHumanApproval: true
           }

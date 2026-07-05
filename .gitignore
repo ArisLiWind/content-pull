@@ -2,6 +2,7 @@ node_modules/
 release/
 .DS_Store
 npm-debug.log*
+.content-pull.local.json
 .viewpull.local.json
 .env
 .env.*

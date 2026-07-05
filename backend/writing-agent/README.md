@@ -1,6 +1,6 @@
-# ViewPull Writing Agent Backend
+# Content Pull Writing Agent Backend
 
-This is the simple persistent backend for ViewPull.
+This is the simple persistent backend for Content Pull.
 
 It does only one thing:
 
@@ -19,7 +19,7 @@ No multi-agent runtime. No MCP. No workflow builder.
 ## Environment
 
 ```bash
-export VIEWPULL_PORT=8788
+export CONTENT_PULL_PORT=8788
 export DEEPSEEK_API_KEY=your_deepseek_key
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3306

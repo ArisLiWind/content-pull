@@ -28,8 +28,8 @@ export class ModelClient {
     }
 
     if (this.config.provider === "deepseek") {
-      const proxied = await this.chatViaViewPullBackend({ system, messages, temperature });
-      if (proxied.ok || proxied.error !== "ViewPull backend is unavailable.") return proxied;
+      const proxied = await this.chatViaContentPullBackend({ system, messages, temperature });
+      if (proxied.ok || proxied.error !== "Content Pull backend is unavailable.") return proxied;
     }
 
     const controller = new AbortController();
@@ -81,7 +81,7 @@ export class ModelClient {
     };
   }
 
-  async chatViaViewPullBackend({ system, messages, temperature }) {
+  async chatViaContentPullBackend({ system, messages, temperature }) {
     const backendUrl = "http://127.0.0.1:8788/assistant/chat";
     const payloadMessages = [
       ...(system ? [{ role: "system", content: system }] : []),
@@ -106,7 +106,7 @@ export class ModelClient {
         return {
           ok: false,
           provider: this.providerLabel,
-          error: payload.error || `ViewPull backend failed: ${response.status}`
+          error: payload.error || `Content Pull backend failed: ${response.status}`
         };
       }
 
@@ -120,7 +120,7 @@ export class ModelClient {
       return {
         ok: false,
         provider: this.providerLabel,
-        error: "ViewPull backend is unavailable."
+        error: "Content Pull backend is unavailable."
       };
     }
   }

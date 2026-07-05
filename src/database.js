@@ -1,4 +1,4 @@
-const DB_NAME = "viewpull-db";
+const DB_NAME = "content-pull-db";
 const DB_VERSION = 1;
 
 const STORES = {
@@ -18,7 +18,7 @@ export const contentDatabase = {
 
   async getKey(key, fallback = null) {
     const db = await getDatabase();
-    if (!db) return readLocal(`viewpull-db:${key}`, fallback);
+    if (!db) return readLocal(`content-pull-db:${key}`, fallback);
     const value = await requestToPromise(transactionStore(db, STORES.kv, "readonly").get(key));
     return value?.value ?? fallback;
   },
@@ -26,7 +26,7 @@ export const contentDatabase = {
   async setKey(key, value) {
     const db = await getDatabase();
     if (!db) {
-      writeLocal(`viewpull-db:${key}`, value);
+      writeLocal(`content-pull-db:${key}`, value);
       return value;
     }
     await requestToPromise(transactionStore(db, STORES.kv, "readwrite").put({ key, value, updatedAt: now() }));
@@ -35,7 +35,7 @@ export const contentDatabase = {
 
   async listTasks() {
     const db = await getDatabase();
-    if (!db) return readLocal("viewpull-tasks", []);
+    if (!db) return readLocal("content-pull-tasks", []);
     const tasks = await requestToPromise(transactionStore(db, STORES.tasks, "readonly").getAll());
     return tasks.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
   },
@@ -49,11 +49,11 @@ export const contentDatabase = {
     };
 
     if (!db) {
-      const tasks = readLocal("viewpull-tasks", []);
+      const tasks = readLocal("content-pull-tasks", []);
       const index = tasks.findIndex((item) => item.taskId === task.taskId);
       if (index >= 0) tasks[index] = nextTask;
       else tasks.unshift(nextTask);
-      writeLocal("viewpull-tasks", tasks.slice(0, 80));
+      writeLocal("content-pull-tasks", tasks.slice(0, 80));
       return nextTask;
     }
 
@@ -64,7 +64,7 @@ export const contentDatabase = {
   async listFiles(taskId) {
     const db = await getDatabase();
     if (!db) {
-      return readLocal("viewpull-files", []).filter((file) => file.taskId === taskId);
+      return readLocal("content-pull-files", []).filter((file) => file.taskId === taskId);
     }
     const index = transactionStore(db, STORES.files, "readonly").index("taskId");
     return requestToPromise(index.getAll(taskId));
@@ -73,11 +73,11 @@ export const contentDatabase = {
   async putFile(file) {
     const db = await getDatabase();
     if (!db) {
-      const files = readLocal("viewpull-files", []);
+      const files = readLocal("content-pull-files", []);
       const index = files.findIndex((item) => item.id === file.id);
       if (index >= 0) files[index] = file;
       else files.unshift(file);
-      writeLocal("viewpull-files", files.slice(0, 200));
+      writeLocal("content-pull-files", files.slice(0, 200));
       return file;
     }
     await requestToPromise(transactionStore(db, STORES.files, "readwrite").put(file));
@@ -114,12 +114,12 @@ export async function migrateLegacyLocalStorage() {
   const db = await getDatabase();
   if (!db) return;
 
-  const legacyTasks = readLocal("viewpull-tasks", []);
+  const legacyTasks = readLocal("content-pull-tasks", []);
   for (const task of legacyTasks) {
     if (task?.taskId) await contentDatabase.putTask(task);
   }
 
-  const legacyFiles = readLocal("viewpull-files", []);
+  const legacyFiles = readLocal("content-pull-files", []);
   for (const file of legacyFiles) {
     if (file?.taskId && file?.path) {
       await contentDatabase.putFile({
@@ -129,8 +129,8 @@ export async function migrateLegacyLocalStorage() {
     }
   }
 
-  const legacyMemory = readLocal("viewpull-memory", null);
-  if (legacyMemory) await contentDatabase.setMemory("viewpull-memory", legacyMemory);
+  const legacyMemory = readLocal("content-pull-memory", null);
+  if (legacyMemory) await contentDatabase.setMemory("content-pull-memory", legacyMemory);
 }
 
 async function getDatabase() {

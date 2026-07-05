@@ -1,9 +1,9 @@
-import { VIEWPULL_BACKEND, assertDeepSeekApiKey } from "./config.mjs";
+import { CONTENT_PULL_BACKEND, assertDeepSeekApiKey } from "./config.mjs";
 import { getDeepSeekApiKey, loadLocalConfig } from "./local-config.mjs";
 
 export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeoutMs = 30000 } = {}) {
   await loadLocalConfig();
-  const effectiveApiKey = String(apiKey || getDeepSeekApiKey() || VIEWPULL_BACKEND.deepseek.apiKey || "").trim();
+  const effectiveApiKey = String(apiKey || getDeepSeekApiKey() || CONTENT_PULL_BACKEND.deepseek.apiKey || "").trim();
   if (!effectiveApiKey) {
     return assertDeepSeekApiKey();
   }
@@ -12,7 +12,7 @@ export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeou
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(`${VIEWPULL_BACKEND.deepseek.apiBaseUrl}/chat/completions`, {
+    const response = await fetch(`${CONTENT_PULL_BACKEND.deepseek.apiBaseUrl}/chat/completions`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${effectiveApiKey}`,
@@ -20,7 +20,7 @@ export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeou
       },
       signal: controller.signal,
       body: JSON.stringify({
-        model: VIEWPULL_BACKEND.deepseek.model,
+        model: CONTENT_PULL_BACKEND.deepseek.model,
         temperature,
         messages
       })
@@ -46,7 +46,7 @@ export async function callDeepSeek(messages, { apiKey, temperature = 0.2, timeou
     return {
       ok: true,
       provider: "deepseek",
-      model: VIEWPULL_BACKEND.deepseek.model,
+      model: CONTENT_PULL_BACKEND.deepseek.model,
       text: data.choices?.[0]?.message?.content || "",
       usage: data.usage || null
     };

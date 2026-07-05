@@ -20,7 +20,7 @@ export async function publishToExternalApp(platform, content = {}, metadata = {}
     platform,
     content,
     metadata,
-    source: "viewpull",
+    source: "content-pull",
     requestedAt: new Date().toISOString()
   };
 

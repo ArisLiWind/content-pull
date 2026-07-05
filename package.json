@@ -1,8 +1,8 @@
 {
-  "name": "viewpull",
+  "name": "content-pull",
   "version": "0.1.0",
   "private": true,
-  "description": "ViewPull: Codex-style AI agent workspace for attention discovery, content research, writing, editing, and publishing drafts.",
+  "description": "Content Pull: Codex-style AI agent workspace for attention discovery, content research, writing, editing, and publishing drafts.",
   "type": "module",
   "main": "electron/main.cjs",
   "scripts": {
@@ -11,11 +11,11 @@
     "dist": "electron-builder",
     "dist:mac": "electron-builder --mac dmg zip",
     "dist:win": "electron-builder --win nsis portable",
-    "backend:start": "node backend/viewpull/server.mjs",
-    "backend:deepseek:test": "node backend/viewpull/deepseek-test.mjs",
+    "backend:start": "node backend/content-pull/server.mjs",
+    "backend:deepseek:test": "node backend/content-pull/deepseek-test.mjs",
     "backend:openclaw:check": "node backend/openclaw/check.mjs",
     "writing-agent:start": "node backend/writing-agent/server.mjs",
-    "check": "node --check src/main.js && node --check src/backend.js && node --check src/harness.js && node --check src/runtime.js && node --check src/llm.js && node --check src/openclaw.js && node --check src/agent-graph.js && node --check src/agent-loop.js && node --check src/channels.js && node --check src/checkpoint.js && node --check src/planning.js && node --check src/mcp.js && node --check src/memory.js && node --check src/filesystem.js && node --check src/document.js && node --check src/nodes.js && node --check src/state.js && node --check src/tools.js && node --check src/publishers.js && node --check src/markdown.js && node --check backend/openclaw/check.mjs && node --check backend/viewpull/config.mjs && node --check backend/viewpull/deepseek.mjs && node --check backend/viewpull/openclaw.mjs && node --check backend/viewpull/local-agent.mjs && node --check backend/viewpull/publishers.mjs && node --check backend/viewpull/server.mjs && node --check backend/viewpull/deepseek-test.mjs && node --check backend/writing-agent/config.mjs && node --check backend/writing-agent/db.mjs && node --check backend/writing-agent/deepseek.mjs && node --check backend/writing-agent/server.mjs"
+    "check": "node --check src/main.js && node --check src/backend.js && node --check src/harness.js && node --check src/runtime.js && node --check src/llm.js && node --check src/openclaw.js && node --check src/agent-graph.js && node --check src/agent-loop.js && node --check src/channels.js && node --check src/checkpoint.js && node --check src/planning.js && node --check src/mcp.js && node --check src/memory.js && node --check src/filesystem.js && node --check src/document.js && node --check src/nodes.js && node --check src/state.js && node --check src/tools.js && node --check src/publishers.js && node --check src/markdown.js && node --check backend/openclaw/check.mjs && node --check backend/content-pull/config.mjs && node --check backend/content-pull/deepseek.mjs && node --check backend/content-pull/openclaw.mjs && node --check backend/content-pull/local-agent.mjs && node --check backend/content-pull/publishers.mjs && node --check backend/content-pull/server.mjs && node --check backend/content-pull/deepseek-test.mjs && node --check backend/writing-agent/config.mjs && node --check backend/writing-agent/db.mjs && node --check backend/writing-agent/deepseek.mjs && node --check backend/writing-agent/server.mjs"
   },
   "keywords": [
     "ai-agent",
@@ -31,8 +31,8 @@
     "electron-builder": "^24.13.3"
   },
   "build": {
-    "appId": "com.viewpull.agent",
-    "productName": "ViewPull",
+    "appId": "com.contentpull.agent",
+    "productName": "Content Pull",
     "files": [
       "index.html",
       "src/**/*",

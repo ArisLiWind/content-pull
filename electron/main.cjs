@@ -8,7 +8,7 @@ function createWindow() {
     minWidth: 980,
     minHeight: 680,
     backgroundColor: "#101010",
-    title: "ViewPull",
+    title: "Content Pull",
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false

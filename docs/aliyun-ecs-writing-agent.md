@@ -1,4 +1,4 @@
-# Deploy ViewPull Writing Agent on Alibaba Cloud ECS
+# Deploy Content Pull Writing Agent on Alibaba Cloud ECS
 
 Target:
 
@@ -19,10 +19,10 @@ POST /task/:id/continue
 1. Create an Alibaba Cloud ECS instance.
 2. Open security group ports:
    - `22` for SSH
-   - `8788` for ViewPull backend, or put Nginx in front and expose `80/443`
+   - `8788` for Content Pull backend, or put Nginx in front and expose `80/443`
 3. Install Node.js 22+ or 24.
 4. Install MySQL 8.
-5. Clone ViewPull.
+5. Clone Content Pull.
 6. Install dependencies:
 
 ```bash
@@ -49,8 +49,8 @@ mysql -u content_x -p content_x < backend/writing-agent/schema.sql
 Use ECS environment variables or a process manager such as PM2:
 
 ```bash
-export VIEWPULL_HOST=0.0.0.0
-export VIEWPULL_PORT=8788
+export CONTENT_PULL_HOST=0.0.0.0
+export CONTENT_PULL_PORT=8788
 export DEEPSEEK_API_KEY=your_deepseek_key
 export MYSQL_HOST=127.0.0.1
 export MYSQL_PORT=3306
@@ -69,7 +69,7 @@ With PM2:
 
 ```bash
 npm install -g pm2
-pm2 start backend/writing-agent/server.mjs --name viewpull-writing-agent
+pm2 start backend/writing-agent/server.mjs --name content-pull-writing-agent
 pm2 save
 ```
 

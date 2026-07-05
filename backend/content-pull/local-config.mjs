@@ -1,8 +1,9 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { VIEWPULL_BACKEND } from "./config.mjs";
+import { CONTENT_PULL_BACKEND } from "./config.mjs";
 
-const LOCAL_CONFIG_PATH = join(process.cwd(), ".viewpull.local.json");
+const LOCAL_CONFIG_PATH = join(process.cwd(), ".content-pull.local.json");
+const LEGACY_LOCAL_CONFIG_PATH = join(process.cwd(), ".viewpull.local.json");
 
 let cachedConfig = null;
 
@@ -13,11 +14,22 @@ export async function loadLocalConfig() {
     const text = await readFile(LOCAL_CONFIG_PATH, "utf8");
     cachedConfig = JSON.parse(text);
   } catch {
-    cachedConfig = {};
+    cachedConfig = await loadLegacyLocalConfig();
   }
 
   applyLocalConfig(cachedConfig);
   return cachedConfig;
+}
+
+async function loadLegacyLocalConfig() {
+  try {
+    const text = await readFile(LEGACY_LOCAL_CONFIG_PATH, "utf8");
+    const legacyConfig = JSON.parse(text);
+    await writeFile(LOCAL_CONFIG_PATH, `${JSON.stringify(legacyConfig, null, 2)}\n`, "utf8");
+    return legacyConfig;
+  } catch {
+    return {};
+  }
 }
 
 export async function saveDeepSeekApiKey(apiKey) {
@@ -73,13 +85,13 @@ export async function getPublisherConnection(platform) {
 }
 
 export function getDeepSeekApiKey() {
-  return VIEWPULL_BACKEND.deepseek.apiKey;
+  return CONTENT_PULL_BACKEND.deepseek.apiKey;
 }
 
 export function publicLocalConfig() {
   return {
-    hasDeepSeekApiKey: Boolean(VIEWPULL_BACKEND.deepseek.apiKey),
-    localConfigPath: ".viewpull.local.json"
+    hasDeepSeekApiKey: Boolean(CONTENT_PULL_BACKEND.deepseek.apiKey),
+    localConfigPath: ".content-pull.local.json"
   };
 }
 
@@ -95,7 +107,7 @@ function publicPublisherConnection(connection = {}) {
 
 function applyLocalConfig(config) {
   const localKey = String(config?.deepseek?.apiKey || "").trim();
-  if (localKey && !VIEWPULL_BACKEND.deepseek.apiKey) {
-    VIEWPULL_BACKEND.deepseek.apiKey = localKey;
+  if (localKey && !CONTENT_PULL_BACKEND.deepseek.apiKey) {
+    CONTENT_PULL_BACKEND.deepseek.apiKey = localKey;
   }
 }
