@@ -88,16 +88,16 @@ input:disabled {
   top: 24px;
   bottom: 24px;
   left: 50%;
-  width: 3px;
+  width: 1px;
   border-radius: 999px;
-  background: transparent;
+  background: var(--border);
   content: "";
   transform: translateX(-50%);
 }
 
 .panel-resizer:hover::after,
 .is-resizing-preview .panel-resizer::after {
-  background: #ff4f4f;
+  background: rgba(255, 255, 255, 0.26);
 }
 
 .is-resizing-preview {

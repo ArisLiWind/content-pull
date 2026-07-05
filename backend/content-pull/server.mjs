@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { CONTENT_PULL_BACKEND, publicBackendConfig } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
 import { listPublisherConnections, loadLocalConfig, publicLocalConfig, saveDeepSeekApiKey, savePublisherConnection } from "./local-config.mjs";
@@ -33,12 +34,14 @@ if (!server) {
   throw new Error("Content Pull backend currently expects the Node.js runtime.");
 }
 
-server.listen(CONTENT_PULL_BACKEND.port, CONTENT_PULL_BACKEND.host, () => {
-  console.log(`Content Pull backend listening on http://${CONTENT_PULL_BACKEND.host}:${CONTENT_PULL_BACKEND.port}`);
-  if (!CONTENT_PULL_BACKEND.deepseek.apiKey) {
-    console.log("DeepSeek API Key missing. Set DEEPSEEK_API_KEY before starting the backend.");
-  }
-});
+if (isMainModule()) {
+  server.listen(CONTENT_PULL_BACKEND.port, CONTENT_PULL_BACKEND.host, () => {
+    console.log(`Content Pull backend listening on http://${CONTENT_PULL_BACKEND.host}:${CONTENT_PULL_BACKEND.port}`);
+    if (!CONTENT_PULL_BACKEND.deepseek.apiKey) {
+      console.log("DeepSeek API Key missing. Set DEEPSEEK_API_KEY before starting the backend.");
+    }
+  });
+}
 
 async function route(request, response) {
   const url = new URL(request.url, `http://${request.headers.host}`);
@@ -356,15 +359,20 @@ async function prepareOpenClawContext(message) {
   return result.text;
 }
 
-function shouldUseOpenClawContext(message) {
-  return /搜索|研究|资料|来源|网页|浏览器|openclaw|工具|最新|今天|联网|查一下|帮我找/i.test(message);
+export function shouldUseOpenClawContext(message) {
+  return /搜索|联网|查一下|帮我查|帮我找|检索|搜一下|搜集|浏览网页|打开网页|读取网页|访问网页|查找资料|找资料|web\s*search|search\s+web/i.test(message);
+}
+
+function isMainModule() {
+  return Boolean(process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href);
 }
 
 function buildAssistantSystemPrompt(openclaw, toolContext) {
   return [
     "你是 Content Pull，一个个人 AI 助手。你要直接和用户对话，而不是默认修改文章。",
     "你的回答应该自然、清楚、可执行。用户没有要求写长文时，不要自动生成文章草稿。",
-    "当用户要求研究、搜索、整理资料、生成方案、写代码、改写文本或规划任务时，你可以给出步骤、结论和下一步建议。",
+    "当用户要求构思、策划、生成方案、写代码、改写文本或规划任务时，先基于已有上下文和模型能力直接构思，不要声称已经搜索。",
+    "只有用户明确要求搜索、联网、查找资料、读取网页或浏览器操作时，才使用 OpenClaw/MCP/Chrome 搜索上下文。",
     "如果用户明确要求修改右侧文件或文章，你可以提醒用户使用下方“修改”输入框；但正常聊天必须直接回答。",
     `OpenClaw runtime: ${openclaw.mode || "unknown"}; MCP tools: ${(openclaw.mcp?.tools || []).join(", ") || "none"}.`,
     toolContext ? `OpenClaw context:\n${toolContext}` : ""
