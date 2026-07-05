@@ -240,12 +240,15 @@ export const nodes = {
       outputs.push(result);
     }
 
+    const hasBlockingOutput = outputs.some((output) => ["failed", "requires_connection"].includes(output.status));
     return {
       publishStatus: {
-        status: "success",
+        status: hasBlockingOutput ? "manual_required" : "success",
         platform: "multi",
         attempts: state.publishStatus.attempts + 1,
-        lastError: "",
+        lastError: hasBlockingOutput
+          ? outputs.find((output) => ["failed", "requires_connection"].includes(output.status))?.error || "External publishing requires configuration."
+          : "",
         outputs
       }
     };

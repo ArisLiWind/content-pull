@@ -97,12 +97,38 @@ export class DraftPublisher {
   }
 
   async publish(prepared) {
-    return {
-      platform: this.platform,
-      status: "draft",
-      content: prepared,
-      url: ""
-    };
+    try {
+      const response = await fetch("http://127.0.0.1:8788/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform: this.platform,
+          content: {
+            markdown: prepared.markdown,
+            title: prepared.title
+          },
+          metadata: prepared.metadata
+        })
+      });
+      const payload = await response.json();
+      return {
+        platform: this.platform,
+        status: payload.status || (response.ok ? "published" : "failed"),
+        content: prepared,
+        url: payload.url || "",
+        externalId: payload.externalId || "",
+        error: payload.error || "",
+        setup: payload.setup || null
+      };
+    } catch (error) {
+      return {
+        platform: this.platform,
+        status: "failed",
+        content: prepared,
+        url: "",
+        error: `ViewPull backend publisher is unavailable: ${error.message}`
+      };
+    }
   }
 }
 

@@ -1,4 +1,6 @@
 import { VIEWPULL_BACKEND } from "./config.mjs";
+import { callLocalAgentTool, listLocalAgentTools } from "./local-agent.mjs";
+import { publishToExternalApp } from "./publishers.mjs";
 
 const memoryStore = new Map();
 const fileStore = new Map();
@@ -59,6 +61,21 @@ const tools = [
         format: { type: "string" }
       }
     }
+  },
+  {
+    name: "publisher.publish",
+    description: "Publish prepared content to an external app connection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        platform: { type: "string" },
+        title: { type: "string" },
+        markdown: { type: "string" },
+        html: { type: "string" },
+        metadata: { type: "object" }
+      },
+      required: ["platform", "markdown"]
+    }
   }
 ];
 
@@ -73,10 +90,29 @@ export function checkMcpRuntime() {
 }
 
 export function listMcpTools() {
-  return tools;
+  return [
+    ...tools,
+    ...listLocalAgentTools().map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+      annotations: {
+        risk: tool.risk,
+        requiresApproval: tool.requiresApproval
+      }
+    }))
+  ];
 }
 
 export async function callMcpTool(name, args = {}) {
+  if (name?.startsWith("local.")) {
+    const result = await callLocalAgentTool(name, args, { approvalId: args.approvalId });
+    return {
+      ok: result.ok,
+      content: [{ type: "json", json: result }]
+    };
+  }
+
   if (name === "content.research") {
     const query = String(args.query || "").trim();
     return {
@@ -127,6 +163,19 @@ export async function callMcpTool(name, args = {}) {
           }
         }
       ]
+    };
+  }
+
+  if (name === "publisher.publish") {
+    const platform = String(args.platform || "").trim();
+    const result = await publishToExternalApp(platform, {
+      markdown: String(args.markdown || ""),
+      html: String(args.html || ""),
+      title: String(args.title || "")
+    }, args.metadata || {});
+    return {
+      ok: result.ok,
+      content: [{ type: "json", json: result }]
     };
   }
 

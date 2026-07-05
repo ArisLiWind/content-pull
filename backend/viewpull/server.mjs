@@ -1,8 +1,10 @@
 import { VIEWPULL_BACKEND, publicBackendConfig } from "./config.mjs";
 import { callDeepSeek } from "./deepseek.mjs";
-import { loadLocalConfig, publicLocalConfig, saveDeepSeekApiKey } from "./local-config.mjs";
+import { listPublisherConnections, loadLocalConfig, publicLocalConfig, saveDeepSeekApiKey, savePublisherConnection } from "./local-config.mjs";
+import { approveRequest, callLocalAgentTool, getLocalAgentStatus, listApprovals, listAuditLog, listLocalAgentTools, requestApproval } from "./local-agent.mjs";
 import { callMcpTool, handleMcpJsonRpc, listMcpTools } from "./mcp.mjs";
 import { askOpenClaw, checkOpenClawRuntime } from "./openclaw.mjs";
+import { publishToExternalApp } from "./publishers.mjs";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -64,6 +66,52 @@ async function route(request, response) {
     return sendJson(response, 200, await checkOpenClawRuntime());
   }
 
+  if (request.method === "GET" && url.pathname === "/local-agent/status") {
+    return sendJson(response, 200, getLocalAgentStatus());
+  }
+
+  if (request.method === "GET" && url.pathname === "/local-agent/tools") {
+    return sendJson(response, 200, {
+      ok: true,
+      tools: listLocalAgentTools()
+    });
+  }
+
+  if (request.method === "GET" && url.pathname === "/local-agent/approvals") {
+    return sendJson(response, 200, {
+      ok: true,
+      approvals: listApprovals()
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/local-agent/approvals") {
+    const body = await readJson(request);
+    return sendJson(response, 200, {
+      ok: true,
+      approval: requestApproval(body.tool, body.input || {}, body.reason || "")
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/local-agent/approvals/approve") {
+    const result = approveRequest((await readJson(request)).id);
+    return sendJson(response, result.ok ? 200 : 404, result);
+  }
+
+  if (request.method === "GET" && url.pathname === "/local-agent/audit") {
+    return sendJson(response, 200, {
+      ok: true,
+      events: listAuditLog()
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/local-agent/tools/call") {
+    const body = await readJson(request);
+    const result = await callLocalAgentTool(body.tool || body.name, body.input || body.arguments || {}, {
+      approvalId: body.approvalId
+    });
+    return sendJson(response, result.ok ? 200 : result.status === "requires_approval" ? 409 : 400, result);
+  }
+
   if (request.method === "GET" && url.pathname === "/config/deepseek") {
     await loadLocalConfig();
     return sendJson(response, 200, {
@@ -81,6 +129,27 @@ async function route(request, response) {
       ok: true,
       ...(await saveDeepSeekApiKey(apiKey))
     });
+  }
+
+  if (request.method === "GET" && url.pathname === "/config/publishers") {
+    return sendJson(response, 200, {
+      ok: true,
+      connections: await listPublisherConnections()
+    });
+  }
+
+  if (request.method === "POST" && url.pathname === "/config/publishers") {
+    const result = await savePublisherConnection(await readJson(request));
+    return sendJson(response, result.ok ? 200 : 400, result);
+  }
+
+  if (request.method === "POST" && url.pathname === "/publish") {
+    const body = await readJson(request);
+    const platform = String(body.platform || "").trim();
+    if (!platform) return sendJson(response, 400, { ok: false, error: "platform is required" });
+
+    const result = await publishToExternalApp(platform, body.content || {}, body.metadata || {});
+    return sendJson(response, result.ok ? 200 : result.status === "requires_connection" ? 409 : 400, result);
   }
 
   if (request.method === "POST" && url.pathname === "/mcp") {

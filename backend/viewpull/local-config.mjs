@@ -35,6 +35,43 @@ export async function saveDeepSeekApiKey(apiKey) {
   return publicLocalConfig();
 }
 
+export async function savePublisherConnection(connection = {}) {
+  const platform = String(connection.platform || "").trim();
+  const webhookUrl = String(connection.webhookUrl || "").trim();
+  if (!platform) return { ok: false, error: "platform is required" };
+  if (!webhookUrl) return { ok: false, error: "webhookUrl is required" };
+
+  const config = await loadLocalConfig();
+  const publishers = {
+    ...(config.publishers || {}),
+    [platform]: {
+      platform,
+      name: String(connection.name || platform).trim(),
+      webhookUrl,
+      apiKey: String(connection.apiKey || "").trim(),
+      updatedAt: new Date().toISOString()
+    }
+  };
+
+  cachedConfig = {
+    ...config,
+    publishers
+  };
+
+  await writeFile(LOCAL_CONFIG_PATH, `${JSON.stringify(cachedConfig, null, 2)}\n`, "utf8");
+  return { ok: true, connection: publicPublisherConnection(cachedConfig.publishers[platform]) };
+}
+
+export async function listPublisherConnections() {
+  const config = await loadLocalConfig();
+  return Object.values(config.publishers || {}).map(publicPublisherConnection);
+}
+
+export async function getPublisherConnection(platform) {
+  const config = await loadLocalConfig();
+  return config.publishers?.[platform] || null;
+}
+
 export function getDeepSeekApiKey() {
   return VIEWPULL_BACKEND.deepseek.apiKey;
 }
@@ -43,6 +80,16 @@ export function publicLocalConfig() {
   return {
     hasDeepSeekApiKey: Boolean(VIEWPULL_BACKEND.deepseek.apiKey),
     localConfigPath: ".viewpull.local.json"
+  };
+}
+
+function publicPublisherConnection(connection = {}) {
+  return {
+    platform: connection.platform,
+    name: connection.name,
+    webhookUrl: connection.webhookUrl,
+    hasApiKey: Boolean(connection.apiKey),
+    updatedAt: connection.updatedAt
   };
 }
 

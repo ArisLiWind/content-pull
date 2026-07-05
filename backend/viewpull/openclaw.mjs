@@ -1,4 +1,5 @@
 import { VIEWPULL_BACKEND } from "./config.mjs";
+import { getLocalAgentStatus } from "./local-agent.mjs";
 import { callMcpTool, checkMcpRuntime } from "./mcp.mjs";
 
 export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
@@ -8,6 +9,7 @@ export async function checkOpenClawRuntime({ timeoutMs = 3500 } = {}) {
       mode: "embedded",
       source: "viewpull-backend",
       mcp: checkMcpRuntime(),
+      localAgent: getLocalAgentStatus(),
       remote: {
         configured: false,
         note: "Set OPENCLAW_REMOTE_URL only when deploying a separate OpenClaw cloud backend."
